@@ -13,6 +13,13 @@ import {
 import { redisConnection, type ScrapeJobData } from '../queue.js';
 import { BaseScraper, type RawScrapedItem } from '../scrapers/base.js';
 import { RedditScraper } from '../scrapers/reddit.js';
+import { ProductHuntScraper } from '../scrapers/producthunt.js';
+import { GitHubScraper } from '../scrapers/github.js';
+import { HackerNewsScraper } from '../scrapers/hackernews.js';
+import { GoogleTrendsScraper } from '../scrapers/google-trends.js';
+import { EurLexScraper } from '../scrapers/eurlex.js';
+import { LegifranceScraper } from '../scrapers/legifrance.js';
+import { INSEEScraper } from '../scrapers/insee.js';
 
 // ---------------------------------------------------------------------------
 // Scraper registry — add new scrapers here as they are implemented
@@ -26,6 +33,13 @@ function registerScraper(scraper: BaseScraper): void {
 
 // Register available scrapers
 registerScraper(new RedditScraper());
+registerScraper(new ProductHuntScraper());
+registerScraper(new GitHubScraper());
+registerScraper(new HackerNewsScraper());
+registerScraper(new GoogleTrendsScraper());
+registerScraper(new EurLexScraper());
+registerScraper(new LegifranceScraper());
+registerScraper(new INSEEScraper());
 
 function getScraperForSource(source: string): BaseScraper {
   const scraper = scraperRegistry.get(source);

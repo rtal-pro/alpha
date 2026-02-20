@@ -57,6 +57,36 @@ export const REDDIT_USER_AGENT = env(
 export const GITHUB_TOKEN = envOptional('GITHUB_TOKEN', '');
 
 // ---------------------------------------------------------------------------
+// ProductHunt
+// ---------------------------------------------------------------------------
+
+export const PRODUCTHUNT_API_TOKEN = envOptional('PRODUCTHUNT_API_TOKEN', '');
+
+// ---------------------------------------------------------------------------
+// SerpAPI (Google Trends, G2, Capterra, etc.)
+// ---------------------------------------------------------------------------
+
+export const SERPAPI_KEY = envOptional('SERPAPI_KEY', '');
+
+// ---------------------------------------------------------------------------
+// Legifrance (DILA / PISTE)
+// ---------------------------------------------------------------------------
+
+export const LEGIFRANCE_API_KEY = envOptional('LEGIFRANCE_API_KEY', '');
+
+// ---------------------------------------------------------------------------
+// INSEE SIRENE API
+// ---------------------------------------------------------------------------
+
+export const SIRENE_API_KEY = envOptional('SIRENE_API_KEY', '');
+
+// ---------------------------------------------------------------------------
+// Anthropic (used by enrich-worker for product classification)
+// ---------------------------------------------------------------------------
+
+export const ANTHROPIC_API_KEY = envOptional('ANTHROPIC_API_KEY', '');
+
+// ---------------------------------------------------------------------------
 // Concurrency limits per source — controls how many BullMQ jobs for each
 // source can run simultaneously.
 // ---------------------------------------------------------------------------

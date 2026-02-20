@@ -78,3 +78,21 @@ export const normalizeQueue = new Queue<NormalizeJobData>('normalize', {
     removeOnFail: { age: 72 * 3600, count: 1000 },
   },
 });
+
+// ---------------------------------------------------------------------------
+// Enrich queue
+// ---------------------------------------------------------------------------
+
+export interface EnrichJobData {
+  productIds: string[];
+}
+
+export const enrichQueue = new Queue<EnrichJobData>('enrich', {
+  connection: redisConnection,
+  defaultJobOptions: {
+    attempts: 2,
+    backoff: { type: 'exponential', delay: 3_000 },
+    removeOnComplete: { age: 24 * 3600, count: 200 },
+    removeOnFail: { age: 72 * 3600, count: 500 },
+  },
+});

@@ -9,6 +9,8 @@ import { HealthChecker } from './health/checker.js';
 import { RedditScraper } from './scrapers/reddit.js';
 import { RedditTransformer } from './transformers/reddit.js';
 import { detectSignals, getRegisteredDetectors } from './signals/index.js';
+import { IntelligencePipeline } from './engine/pipeline.js';
+import { FeedbackLoop, type FeedbackEvent } from './engine/feedback.js';
 
 // ---------------------------------------------------------------------------
 // Bootstrap
@@ -205,6 +207,59 @@ server.get('/signals/detectors', async (_request, reply) => {
   return reply.send({
     detectors: getRegisteredDetectors(),
   });
+});
+
+// ---------------------------------------------------------------------------
+// POST /pipeline/run — trigger the full intelligence pipeline
+// ---------------------------------------------------------------------------
+
+server.post('/pipeline/run', async (request, reply) => {
+  const secret = request.headers['x-webhook-secret'] as string | undefined;
+  if (WEBHOOK_SECRET && secret !== WEBHOOK_SECRET) {
+    return reply.status(401).send({ error: 'Invalid webhook secret' });
+  }
+
+  try {
+    const pipeline = new IntelligencePipeline();
+    const result = await pipeline.run();
+
+    request.log.info(result, 'Intelligence pipeline completed');
+    return reply.send({ status: 'ok', ...result });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    request.log.error({ error: message }, 'Pipeline failed');
+    return reply.status(500).send({ error: message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /feedback — record user feedback on opportunities
+// ---------------------------------------------------------------------------
+
+server.post<{ Body: FeedbackEvent }>('/feedback', async (request, reply) => {
+  const { type, opportunity_id, idea_id, reason, dismiss_category } = request.body;
+
+  if (!type || !opportunity_id) {
+    return reply.status(400).send({ error: 'Missing required fields: type, opportunity_id' });
+  }
+
+  try {
+    const feedback = new FeedbackLoop();
+    await feedback.recordFeedback({
+      type,
+      opportunity_id,
+      idea_id,
+      reason,
+      dismiss_category,
+    });
+
+    request.log.info({ type, opportunity_id }, 'Feedback recorded');
+    return reply.send({ status: 'ok', type, opportunity_id });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    request.log.error({ error: message }, 'Feedback recording failed');
+    return reply.status(500).send({ error: message });
+  }
 });
 
 // ---------------------------------------------------------------------------
