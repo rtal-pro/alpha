@@ -163,6 +163,141 @@ export interface DataQualityScore {
   composite: number;
 }
 
+// ============================================================
+// Signal types (for intelligence engine)
+// ============================================================
+
+export const SIGNAL_TYPES = [
+  'product_launch', 'funding_round', 'traffic_spike', 'review_surge',
+  'community_buzz', 'regulatory_event', 'oss_traction', 'company_registration',
+  'pricing_change', 'pain_point_cluster', 'search_trend', 'market_entry', 'market_exit',
+] as const;
+
+export type SignalType = typeof SIGNAL_TYPES[number];
+
+export interface DetectedSignal {
+  signal_type: SignalType;
+  title: string;
+  description: string;
+  strength: number;          // 0-100
+  category: string;
+  geo_relevance: string[];
+  source: ScrapeSource;
+  source_url?: string;
+  occurred_at: Date;
+  product_id?: string;
+  raw_event_id?: string;
+  evidence: Record<string, unknown>;
+}
+
+// ============================================================
+// Opportunity types
+// ============================================================
+
+export const OPPORTUNITY_TYPES = [
+  'geo_gap', 'regulatory_gap', 'convergence', 'competitor_weakness',
+] as const;
+
+export type OpportunityType = typeof OPPORTUNITY_TYPES[number];
+
+export interface Opportunity {
+  id?: string;
+  title: string;
+  slug?: string;
+  category: string;
+  description?: string;
+  type: OpportunityType;
+  composite_score: number;
+  growth_score?: number;
+  gap_score?: number;
+  regulatory_score?: number;
+  feasibility_score?: number;
+  source_products: string[];
+  source_signals: string[];
+  source_regulations: string[];
+  evidence_summary?: Record<string, unknown>;
+  score_history?: Array<{ score: number; timestamp: Date; signal_count: number }>;
+  target_geo?: string;
+  reference_geo?: string;
+  embedding?: number[];
+  detection_count?: number;
+  status: string;
+}
+
+// ============================================================
+// Idea types
+// ============================================================
+
+export interface Idea {
+  id?: string;
+  opportunity_id: string;
+  title: string;
+  one_liner?: string;
+  target_persona?: string;
+  core_features: string[];
+  differentiation?: string;
+  entry_strategy?: string;
+  estimated_complexity?: string;
+  revenue_model?: string;
+  why_now?: string;
+  status: 'draft' | 'active' | 'stale' | 'refreshing' | 'archived' | 'pursued';
+  freshness?: number;
+  expires_at: Date;
+}
+
+// ============================================================
+// Domain profile types
+// ============================================================
+
+export interface DomainProfile {
+  id: string;
+  name: string;
+  signalWeights: Record<SignalType, number>;
+  primarySources: ScrapeSource[];
+  secondarySources: ScrapeSource[];
+  irrelevantSources: ScrapeSource[];
+  crossingRules: CrossingRule[];
+  keywords: string[];
+  categories: string[];
+}
+
+export interface CrossingRule {
+  name: string;
+  description: string;
+  conditions: CrossingCondition[];
+}
+
+export interface CrossingCondition {
+  signal_type: SignalType;
+  min_strength?: number;
+  min_count?: number;
+  time_window_days?: number;
+}
+
+// ============================================================
+// Feedback types
+// ============================================================
+
+export const DISMISS_REASONS = [
+  'market_too_small', 'too_competitive', 'not_my_expertise',
+  'bad_timing', 'already_exists_fr', 'not_interesting',
+  'too_complex', 'wrong_category',
+] as const;
+
+export type DismissReason = typeof DISMISS_REASONS[number];
+
+export interface FeedbackEvent {
+  type: 'dismiss' | 'save' | 'explore' | 'pursue' | 'archive';
+  opportunity_id: string;
+  idea_id?: string;
+  reason?: string;
+  dismiss_category?: DismissReason;
+}
+
+// ============================================================
+// Source reliability
+// ============================================================
+
 export const SOURCE_RELIABILITY: Record<string, number> = {
   eurlex: 0.99,
   legifrance: 0.99,

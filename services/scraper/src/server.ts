@@ -8,6 +8,7 @@ import { scrapeQueue, type ScrapeJobData } from './queue.js';
 import { HealthChecker } from './health/checker.js';
 import { RedditScraper } from './scrapers/reddit.js';
 import { RedditTransformer } from './transformers/reddit.js';
+import { detectSignals, getRegisteredDetectors } from './signals/index.js';
 
 // ---------------------------------------------------------------------------
 // Bootstrap
@@ -146,6 +147,64 @@ server.post<{ Body: RedditScrapeBody }>('/scrape/reddit', async (request, reply)
     request.log.error({ error: message }, 'Reddit scrape failed');
     return reply.status(500).send({ error: message });
   }
+});
+
+// ---------------------------------------------------------------------------
+// POST /scrape/reddit/pipeline — full pipeline: scrape → transform → detect
+// ---------------------------------------------------------------------------
+
+server.post<{ Body: RedditScrapeBody }>('/scrape/reddit/pipeline', async (request, reply) => {
+  const { keywords, subreddits, limit } = request.body;
+
+  if (!keywords || !Array.isArray(keywords) || keywords.length === 0) {
+    return reply.status(400).send({ error: 'keywords must be a non-empty array' });
+  }
+
+  try {
+    // 1. Scrape
+    const scraper = new RedditScraper();
+    const rawItems = await scraper.scrape({
+      type: 'keyword_search',
+      keywords,
+      subreddits: subreddits ?? ['SaaS', 'startups', 'Entrepreneur', 'microsaas'],
+      limit: limit ?? 25,
+    });
+
+    // 2. Transform
+    const transformer = new RedditTransformer();
+    const normalized = transformer.transform(rawItems);
+
+    // 3. Detect signals
+    const signals = await detectSignals(normalized);
+
+    request.log.info(
+      { rawCount: rawItems.length, normalizedCount: normalized.length, signalCount: signals.length },
+      'Reddit pipeline completed',
+    );
+
+    return reply.send({
+      status: 'ok',
+      rawCount: rawItems.length,
+      normalizedCount: normalized.length,
+      signalCount: signals.length,
+      signals,
+      normalized,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    request.log.error({ error: message }, 'Reddit pipeline failed');
+    return reply.status(500).send({ error: message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /signals/detectors — list registered signal detectors
+// ---------------------------------------------------------------------------
+
+server.get('/signals/detectors', async (_request, reply) => {
+  return reply.send({
+    detectors: getRegisteredDetectors(),
+  });
 });
 
 // ---------------------------------------------------------------------------
