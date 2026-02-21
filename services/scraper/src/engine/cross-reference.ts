@@ -446,10 +446,15 @@ export class CrossReferenceEngine {
     const weights = await this.getAdjustedWeights(category);
 
     // Check each domain's crossing rules
-    for (const domain of DOMAIN_PROFILES) {
-      if (!domain.categories.includes(category) && domain.id !== 'general_saas') {
-        continue;
-      }
+    // Only use general_saas as fallback if no specific domain matched
+    const specificDomains = DOMAIN_PROFILES.filter(
+      (d) => d.id !== 'general_saas' && d.categories.includes(category),
+    );
+    const domainsToCheck = specificDomains.length > 0
+      ? specificDomains
+      : DOMAIN_PROFILES.filter((d) => d.id === 'general_saas');
+
+    for (const domain of domainsToCheck) {
 
       for (const rule of domain.crossingRules) {
         const matchResult = this.checkRule(rule, signals as DetectedSignal[], cutoff);
@@ -681,7 +686,8 @@ export class CrossReferenceEngine {
         (s) =>
           s.signal_type === condition.signal_type &&
           (s.strength ?? 0) >= (condition.min_strength ?? 0) &&
-          new Date(s.occurred_at) >= effectiveCutoff,
+          // DB column is detected_at, but DetectedSignal type has occurred_at
+          new Date((s as unknown as Record<string, unknown>)['detected_at'] as string ?? s.occurred_at) >= effectiveCutoff,
       );
 
       if (matchingSignals.length < (condition.min_count ?? 1)) {
@@ -763,6 +769,15 @@ export class CrossReferenceEngine {
     if (sum > 0) {
       for (const key of Object.keys(weights)) {
         weights[key]! /= sum;
+      }
+    } else {
+      // All weights zeroed out — fall back to uniform distribution
+      const count = Object.keys(weights).length;
+      if (count > 0) {
+        const uniform = 1 / count;
+        for (const key of Object.keys(weights)) {
+          weights[key] = uniform;
+        }
       }
     }
 

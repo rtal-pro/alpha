@@ -228,31 +228,47 @@ export class OpportunityGenerator {
 
     if (!gaps || gaps.length === 0) return [];
 
-    return gaps.map((gap: Record<string, unknown>) => ({
-      title: `Geo gap: ${gap['category']} (${gap['reference_geo']} → FR)`,
-      category: gap['category'] as string,
-      description:
-        `${gap['reference_product_count']} products in ${gap['reference_geo']} vs ` +
-        `${gap['target_product_count']} in FR. Gap score: ${gap['gap_score']}.`,
-      type: 'geo_gap' as const,
-      composite_score: Number(gap['opportunity_score'] ?? gap['gap_score'] ?? 50),
-      growth_score: 0,
-      gap_score: Number(gap['gap_score'] ?? 0),
-      regulatory_score: Number(gap['regulatory_boost'] ?? 0),
-      feasibility_score: Math.max(30, 100 - Number(gap['reference_product_count'] ?? 0) * 3),
-      source_products: [],
-      source_signals: [],
-      source_regulations: [],
-      evidence_summary: {
-        reference_products: gap['reference_product_count'],
-        target_products: gap['target_product_count'],
-        gap_type: gap['gap_type'],
-        gap_evidence: gap['gap_evidence'],
-      },
-      target_geo: 'FR',
-      reference_geo: gap['reference_geo'] as string,
-      status: 'new',
-    }));
+    const opportunities: GeneratedOpportunity[] = [];
+
+    for (const gap of gaps) {
+      const category = gap['category'] as string;
+
+      // Fetch related signals to populate source_signals (prevents empty array breaking feedback)
+      const { data: relatedSignals } = await this.supabase
+        .from('signals')
+        .select('id')
+        .eq('category', category)
+        .gte('detected_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString())
+        .limit(10);
+
+      opportunities.push({
+        title: `Geo gap: ${category} (${gap['reference_geo']} → FR)`,
+        category,
+        description:
+          `${gap['reference_product_count']} products in ${gap['reference_geo']} vs ` +
+          `${gap['target_product_count']} in FR. Gap score: ${gap['gap_score']}.`,
+        type: 'geo_gap' as const,
+        composite_score: Number(gap['opportunity_score'] ?? gap['gap_score'] ?? 50),
+        growth_score: 0,
+        gap_score: Number(gap['gap_score'] ?? 0),
+        regulatory_score: Number(gap['regulatory_boost'] ?? 0),
+        feasibility_score: Math.max(30, 100 - Number(gap['reference_product_count'] ?? 0) * 3),
+        source_products: [],
+        source_signals: (relatedSignals ?? []).map((s: { id: string }) => s.id),
+        source_regulations: [],
+        evidence_summary: {
+          reference_products: gap['reference_product_count'],
+          target_products: gap['target_product_count'],
+          gap_type: gap['gap_type'],
+          gap_evidence: gap['gap_evidence'],
+        },
+        target_geo: 'FR',
+        reference_geo: gap['reference_geo'] as string,
+        status: 'new',
+      });
+    }
+
+    return opportunities;
   }
 
   // -----------------------------------------------------------------------
@@ -368,9 +384,13 @@ export class OpportunityGenerator {
         (sum: number, s: { strength: number }) => sum + s.strength, 0,
       ) / catSignals.length;
 
-      const signalIds = catSignals
-        .map((s: { id: string }) => s.id)
-        .slice(0, 20);
+      const allSignalIds = catSignals.map((s: { id: string }) => s.id);
+      if (allSignalIds.length > 50) {
+        console.warn(
+          `[opportunity-gen] Convergence in "${category}": truncating ${allSignalIds.length} signal IDs to 50`,
+        );
+      }
+      const signalIds = allSignalIds.slice(0, 50);
 
       opportunities.push({
         title: `Signal convergence in ${category} (${uniqueTypes.size} types)`,

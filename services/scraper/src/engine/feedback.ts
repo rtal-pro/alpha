@@ -123,11 +123,20 @@ export class FeedbackLoop {
       }
     }
 
-    // Renormalize to sum to 1.0
+    // Renormalize to sum to 1.0 (guard against all-zero weights)
     const sum = Object.values(weights).reduce((a, b) => a + b, 0);
     if (sum > 0) {
       for (const key of Object.keys(weights)) {
         weights[key]! /= sum;
+      }
+    } else {
+      // All weights zeroed out — fall back to uniform distribution
+      const count = Object.keys(weights).length;
+      if (count > 0) {
+        const uniform = 1 / count;
+        for (const key of Object.keys(weights)) {
+          weights[key] = uniform;
+        }
       }
     }
 
@@ -163,7 +172,8 @@ export class FeedbackLoop {
     // Cap total penalty at 50% — never fully suppress a category
     totalPenalty = Math.min(0.5, totalPenalty);
 
-    return score * (1 - totalPenalty);
+    // Ensure score never goes negative
+    return Math.max(0, score * (1 - totalPenalty));
   }
 
   // -----------------------------------------------------------------------

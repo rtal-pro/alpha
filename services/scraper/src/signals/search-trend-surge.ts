@@ -111,7 +111,7 @@ export class SearchTrendSurgeDetector extends BaseSignalDetector {
         strength,
         category,
         geo_relevance: this.inferGeo(suggestions),
-        source: 'google_autocomplete',
+        source: (suggestions[0]!.source as ScrapeSource) ?? 'google_autocomplete',
         occurred_at: new Date(),
         evidence: {
           keyword,

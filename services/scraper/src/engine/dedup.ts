@@ -128,14 +128,23 @@ export class OpportunityDeduplicator {
 
   private async dedupOne(opp: GeneratedOpportunity): Promise<DedupResult> {
     // Layer 1: Exact match on category + type + target_geo
-    const { data: exactMatches } = await this.supabase
+    // Handle GLOBAL ↔ specific geo equivalence to prevent duplicate slippage
+    const targetGeo = opp.target_geo || 'FR';
+    let exactQuery = this.supabase
       .from('opportunities')
       .select('id, title, category, type, target_geo, composite_score, source_signals, score_history, detection_count, status')
       .eq('category', opp.category)
       .eq('type', opp.type)
-      .eq('target_geo', opp.target_geo ?? 'FR')
       .not('status', 'in', '("archived","dismissed")')
       .limit(5);
+
+    if (targetGeo === 'GLOBAL') {
+      exactQuery = exactQuery.or(`target_geo.eq.GLOBAL,target_geo.eq.FR`);
+    } else {
+      exactQuery = exactQuery.or(`target_geo.eq.${targetGeo},target_geo.eq.GLOBAL`);
+    }
+
+    const { data: exactMatches } = await exactQuery;
 
     if (exactMatches && exactMatches.length > 0) {
       const best = exactMatches[0] as ExistingOpportunity;
@@ -168,9 +177,11 @@ export class OpportunityDeduplicator {
           const existingSignals = new Set(existing.source_signals ?? []);
           const incomingSignals = new Set(opp.source_signals);
           const intersection = [...incomingSignals].filter((s) => existingSignals.has(s));
-          const overlapRatio = intersection.length / Math.max(existingSignals.size, 1);
+          // Use Jaccard similarity (intersection / union) for symmetric comparison
+          const unionSize = new Set([...existingSignals, ...incomingSignals]).size;
+          const overlapRatio = unionSize > 0 ? intersection.length / unionSize : 0;
 
-          if (overlapRatio > 0.6) {
+          if (overlapRatio > 0.5) {
             return {
               action: 'merge',
               opportunity: opp,

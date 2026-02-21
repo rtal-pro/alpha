@@ -153,10 +153,10 @@ export class LLMEnrichment {
 
     return {
       ...opp,
-      // Blend LLM quality with existing composite score
-      composite_score: Math.round(
+      // Blend LLM quality with existing composite score (clamp to 0-100)
+      composite_score: Math.max(0, Math.min(100, Math.round(
         opp.composite_score * 0.6 + parsed.quality_score * 0.4,
-      ),
+      ))),
       llm_quality_score: parsed.quality_score,
       llm_verdict: parsed.verdict,
       llm_reasoning: parsed.reasoning,

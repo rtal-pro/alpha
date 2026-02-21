@@ -183,8 +183,9 @@ export class TalentDemandDetector extends BaseSignalDetector {
       if (/\bfrance|paris|lyon|marseille|toulouse|nantes|bordeaux\b/.test(location)) geos.add('FR');
       if (/\bgermany|berlin|munich|münchen|hamburg\b/.test(location)) geos.add('DE');
       if (/\buk|london|manchester|united kingdom\b/.test(location)) geos.add('UK');
-      if (/\bus|usa|united states|new york|san francisco|remote\b/.test(location)) geos.add('US');
+      if (/\bus|usa|united states|new york|san francisco\b/.test(location)) geos.add('US');
       if (/\beurope|eu\b/.test(location)) geos.add('EU');
+      if (/\bremote|worldwide|global|anywhere\b/.test(location)) geos.add('GLOBAL');
     }
 
     if (geos.size === 0) geos.add('GLOBAL');

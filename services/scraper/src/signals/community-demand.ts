@@ -164,13 +164,13 @@ export class CommunityDemandDetector extends BaseSignalDetector {
     for (const item of items) {
       const text = `${item.title} ${item.description ?? ''}`.toLowerCase();
 
-      if (text.includes('france') || text.includes('french') || text.includes(' fr ') || text.includes('paris')) {
+      if (/\b(france|french|paris|lyon|marseille)\b/.test(text)) {
         geos.add('FR');
       }
-      if (text.includes('europe') || text.includes('european') || text.includes(' eu ')) {
+      if (/\b(europe|european)\b/.test(text) || /\beu\b/.test(text)) {
         geos.add('EU');
       }
-      if (text.includes('united states') || text.includes(' us ') || text.includes('american')) {
+      if (/\b(united states|american|usa)\b/.test(text) || /\bus\b/.test(text)) {
         geos.add('US');
       }
     }

@@ -154,17 +154,21 @@ export class IntelligencePipeline {
     // For now, use product_metrics as a proxy for "recently normalized"
     const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000); // Last 24 hours
 
-    const { data: recentProducts } = await this.supabase
+    const { data: recentProducts, count } = await this.supabase
       .from('products')
-      .select('id, canonical_name, primary_category, description, tags')
+      .select('id, canonical_name, primary_category, description, tags, source', { count: 'exact' })
       .gte('last_updated_at', cutoff.toISOString())
       .limit(200);
 
     if (!recentProducts || recentProducts.length === 0) return [];
 
+    if (count && count > 200) {
+      console.warn(`[pipeline] Truncated products: ${count} available, processing first 200`);
+    }
+
     // Convert to NormalizedItem format for signal detectors
     const items = recentProducts.map((p: Record<string, unknown>) => ({
-      source: 'reddit' as const, // Will be enriched when we have source tracking
+      source: ((p['source'] as string) ?? 'unknown') as 'reddit',
       externalId: p['id'] as string,
       title: p['canonical_name'] as string,
       description: (p['description'] as string) ?? undefined,
