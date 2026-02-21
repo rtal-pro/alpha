@@ -51,7 +51,7 @@ const SUBREDDIT_CATEGORIES: Record<string, string> = {
 export class CommunityDemandDetector extends BaseSignalDetector {
   readonly name = 'CommunityDemandDetector';
   readonly signalTypes: SignalType[] = ['community_buzz'];
-  readonly supportedSources: ScrapeSource[] = ['reddit', 'hacker_news', 'indiehackers'];
+  readonly supportedSources: ScrapeSource[] = ['reddit', 'hacker_news', 'indiehackers', 'twitter', 'stackoverflow'];
 
   async detect(items: NormalizedItem[]): Promise<DetectedSignal[]> {
     const relevant = items.filter((i) => this.supportedSources.includes(i.source as ScrapeSource));

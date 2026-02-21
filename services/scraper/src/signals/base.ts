@@ -12,7 +12,8 @@ export type ScrapeSource =
   | 'crunchbase' | 'appsumo' | 'indiehackers' | 'ycombinator'
   | 'eurlex' | 'legifrance' | 'insee' | 'data_gouv'
   | 'pappers' | 'serpapi_g2' | 'serpapi_capterra' | 'serpapi_serp'
-  | 'google_autocomplete';
+  | 'google_autocomplete'
+  | 'twitter' | 'stackoverflow' | 'job_boards';
 
 export interface DetectedSignal {
   signal_type: SignalType;

@@ -87,6 +87,18 @@ export const SIRENE_API_KEY = envOptional('SIRENE_API_KEY', '');
 export const ANTHROPIC_API_KEY = envOptional('ANTHROPIC_API_KEY', '');
 
 // ---------------------------------------------------------------------------
+// Twitter/X
+// ---------------------------------------------------------------------------
+
+export const TWITTER_BEARER_TOKEN = envOptional('TWITTER_BEARER_TOKEN', '');
+
+// ---------------------------------------------------------------------------
+// StackOverflow
+// ---------------------------------------------------------------------------
+
+export const STACKOVERFLOW_API_KEY = envOptional('STACKOVERFLOW_API_KEY', '');
+
+// ---------------------------------------------------------------------------
 // Concurrency limits per source — controls how many BullMQ jobs for each
 // source can run simultaneously.
 // ---------------------------------------------------------------------------
@@ -97,7 +109,7 @@ export const CONCURRENCY: Record<string, number> = {
   github: 2,
   hacker_news: 2,
   google_trends: 1,
-  indiehackers: 1,
+  indiehackers: 2,
   ycombinator: 1,
   crunchbase: 1,
   appsumo: 1,
@@ -110,4 +122,33 @@ export const CONCURRENCY: Record<string, number> = {
   serpapi_capterra: 1,
   serpapi_serp: 1,
   google_autocomplete: 2,
+  twitter: 2,
+  stackoverflow: 2,
+  job_boards: 1,
+};
+
+// ---------------------------------------------------------------------------
+// Source reliability scores — used by signal weighting.
+// Higher = more trustworthy data.
+// ---------------------------------------------------------------------------
+
+export const SOURCE_RELIABILITY: Record<string, number> = {
+  eurlex: 0.99,
+  legifrance: 0.99,
+  insee: 0.98,
+  github: 0.95,
+  pappers: 0.90,
+  reddit: 0.85,
+  hacker_news: 0.85,
+  crunchbase: 0.85,
+  stackoverflow: 0.85,
+  producthunt: 0.80,
+  twitter: 0.75,
+  indiehackers: 0.75,
+  appsumo: 0.75,
+  job_boards: 0.75,
+  serpapi_g2: 0.70,
+  serpapi_capterra: 0.70,
+  google_trends: 0.65,
+  google_autocomplete: 0.60,
 };

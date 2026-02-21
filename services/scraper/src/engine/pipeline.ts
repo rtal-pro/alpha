@@ -2,11 +2,13 @@
 // Intelligence Pipeline — orchestrates the full analysis cycle:
 //
 // 1. Run signal detection on recent normalized data
-// 2. Run cross-referencing engine
-// 3. Generate opportunities from 4 paths + crossing matches
-// 4. Deduplicate against existing opportunities
+// 2. Persist signals to database
+// 3. Run cross-referencing engine
+// 4. Generate opportunities from 4 paths + crossing matches
 // 5. Apply feedback penalties
-// 6. Persist new opportunities and merge existing ones
+// 6. LLM enrichment (quality filter + actionable insights)
+// 7. Deduplicate against existing opportunities
+// 8. Persist new opportunities and merge existing ones
 // ---------------------------------------------------------------------------
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
@@ -16,6 +18,7 @@ import { CrossReferenceEngine } from './cross-reference.js';
 import { OpportunityGenerator, type GeneratedOpportunity } from './opportunity-generator.js';
 import { OpportunityDeduplicator } from './dedup.js';
 import { FeedbackLoop } from './feedback.js';
+import { LLMEnrichment } from './llm-enrichment.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -26,6 +29,8 @@ export interface PipelineResult {
   crossingMatches: number;
   emergentPatterns: number;
   opportunitiesGenerated: number;
+  opportunitiesEnriched: number;
+  opportunitiesFilteredAsNoise: number;
   opportunitiesCreated: number;
   opportunitiesMerged: number;
   opportunitiesSkipped: number;
@@ -42,6 +47,7 @@ export class IntelligencePipeline {
   private generator: OpportunityGenerator;
   private dedup: OpportunityDeduplicator;
   private feedback: FeedbackLoop;
+  private llmEnrichment: LLMEnrichment;
 
   constructor() {
     this.supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
@@ -51,6 +57,7 @@ export class IntelligencePipeline {
     this.generator = new OpportunityGenerator();
     this.dedup = new OpportunityDeduplicator();
     this.feedback = new FeedbackLoop();
+    this.llmEnrichment = new LLMEnrichment();
   }
 
   /**
@@ -83,10 +90,18 @@ export class IntelligencePipeline {
     // 5. Apply feedback penalties
     const penalized = await this.applyPenalties(allCandidates);
 
-    // 6. Deduplicate
-    const dedupResults = await this.dedup.dedup(penalized);
+    // 6. LLM enrichment — quality filter + actionable insights
+    const enriched = await this.llmEnrichment.enrichBatch(penalized);
+    const viable = this.llmEnrichment.filterViable(enriched);
+    const filteredAsNoise = enriched.length - viable.length;
+    console.log(
+      `[pipeline] Step 6: Enriched ${enriched.length}, filtered ${filteredAsNoise} as noise`,
+    );
 
-    // 7. Persist: create new, merge existing
+    // 7. Deduplicate
+    const dedupResults = await this.dedup.dedup(viable);
+
+    // 8. Persist: create new, merge existing
     let created = 0;
     let merged = 0;
     let skipped = 0;
@@ -114,6 +129,8 @@ export class IntelligencePipeline {
       crossingMatches: crossingMatches.length,
       emergentPatterns: emergentPatterns.length,
       opportunitiesGenerated: allCandidates.length,
+      opportunitiesEnriched: enriched.length,
+      opportunitiesFilteredAsNoise: filteredAsNoise,
       opportunitiesCreated: created,
       opportunitiesMerged: merged,
       opportunitiesSkipped: skipped,
@@ -122,7 +139,7 @@ export class IntelligencePipeline {
 
     console.log(
       `[pipeline] Complete in ${durationMs}ms: ` +
-      `${created} created, ${merged} merged, ${skipped} skipped`,
+      `${created} created, ${merged} merged, ${skipped} skipped, ${filteredAsNoise} noise-filtered`,
     );
 
     return result;

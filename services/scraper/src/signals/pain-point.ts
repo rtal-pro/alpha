@@ -53,7 +53,7 @@ const FEATURE_GAP_PATTERNS = [
 export class PainPointClusterDetector extends BaseSignalDetector {
   readonly name = 'PainPointClusterDetector';
   readonly signalTypes: SignalType[] = ['pain_point_cluster'];
-  readonly supportedSources: ScrapeSource[] = ['reddit', 'hacker_news', 'indiehackers'];
+  readonly supportedSources: ScrapeSource[] = ['reddit', 'hacker_news', 'indiehackers', 'twitter', 'stackoverflow'];
 
   async detect(items: NormalizedItem[]): Promise<DetectedSignal[]> {
     const relevant = items.filter((i) => this.supportedSources.includes(i.source as ScrapeSource));

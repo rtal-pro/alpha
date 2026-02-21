@@ -5,6 +5,10 @@
 import { BaseSignalDetector, type DetectedSignal, type NormalizedItem } from './base.js';
 import { CommunityDemandDetector } from './community-demand.js';
 import { PainPointClusterDetector } from './pain-point.js';
+import { SearchTrendSurgeDetector } from './search-trend-surge.js';
+import { OSSCommercialGapDetector } from './oss-commercial-gap.js';
+import { PricingFrustrationDetector } from './pricing-frustration.js';
+import { TalentDemandDetector } from './talent-demand.js';
 
 // Re-export types
 export type { DetectedSignal, NormalizedItem, SignalType, ScrapeSource } from './base.js';
@@ -17,11 +21,10 @@ export { BaseSignalDetector } from './base.js';
 const detectors: BaseSignalDetector[] = [
   new CommunityDemandDetector(),
   new PainPointClusterDetector(),
-  // Add new detectors here as they are implemented:
-  // new SearchDemandDetector(),
-  // new CompetitorWeaknessDetector(),
-  // new ProductLaunchDetector(),
-  // new RegulatoryUrgencyDetector(),
+  new SearchTrendSurgeDetector(),
+  new OSSCommercialGapDetector(),
+  new PricingFrustrationDetector(),
+  new TalentDemandDetector(),
 ];
 
 /**
