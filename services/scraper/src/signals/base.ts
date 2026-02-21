@@ -13,7 +13,11 @@ export type ScrapeSource =
   | 'eurlex' | 'legifrance' | 'insee' | 'data_gouv'
   | 'pappers' | 'serpapi_g2' | 'serpapi_capterra' | 'serpapi_serp'
   | 'google_autocomplete'
-  | 'twitter' | 'stackoverflow' | 'job_boards';
+  | 'twitter' | 'stackoverflow' | 'job_boards'
+  | 'trustpilot' | 'shopify_apps' | 'chrome_webstore' | 'zapier'
+  | 'similarweb' | 'builtwith'
+  | 'eu_ted' | 'boamp'
+  | 'upwork' | 'malt' | 'pricing_tracker';
 
 export interface DetectedSignal {
   signal_type: SignalType;
