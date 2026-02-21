@@ -58,11 +58,16 @@ import { DealroomTransformer } from '../transformers/dealroom.js';
 import { OpenStartupsTransformer } from '../transformers/open-startups.js';
 import { SaaSHubTransformer } from '../transformers/saashub.js';
 import { StarterStoryTransformer } from '../transformers/starter-story.js';
+// --- Previously missing transformers ---
+import { AppSumoTransformer } from '../transformers/appsumo.js';
+import { YCombinatorTransformer } from '../transformers/ycombinator.js';
+import { PappersTransformer } from '../transformers/pappers.js';
+import { SerpAPISerpTransformer } from '../transformers/serpapi-serp.js';
 
 import type { RawScrapedItem } from '../scrapers/base.js';
 
 // ---------------------------------------------------------------------------
-// Transformer registry — all 36 transformers registered
+// Transformer registry — all 40 transformers registered
 // ---------------------------------------------------------------------------
 
 const transformerRegistry: Map<string, BaseTransformer> = new Map();
@@ -117,6 +122,11 @@ registerTransformer(new DealroomTransformer());
 registerTransformer(new OpenStartupsTransformer());
 registerTransformer(new SaaSHubTransformer());
 registerTransformer(new StarterStoryTransformer());
+// Previously missing transformers (now complete)
+registerTransformer(new AppSumoTransformer());
+registerTransformer(new YCombinatorTransformer());
+registerTransformer(new PappersTransformer());
+registerTransformer(new SerpAPISerpTransformer());
 
 function getTransformerForSource(source: string): BaseTransformer {
   const transformer = transformerRegistry.get(source);
@@ -260,6 +270,38 @@ function computeSourceAwareStrength(
         (metrics['featureGatingChanged'] ?? 0);
       return Math.round(Math.min(changes / 3, 1) * 100) / 100;
     }
+    case 'appsumo': {
+      const rating = metrics['rating'] ?? 0;
+      const reviews = metrics['review_count'] ?? 0;
+      const discount = metrics['discount_pct'] ?? 0;
+      return Math.round(
+        (Math.min(reviews / 500, 1) * 0.4 + (rating / 5) * 0.3 + Math.min(discount / 90, 1) * 0.3) * 100,
+      ) / 100;
+    }
+    case 'ycombinator': {
+      const teamSize = metrics['team_size'] ?? 0;
+      const score = metrics['score'] ?? 0;
+      return Math.round(
+        (Math.min(teamSize / 50, 1) * 0.4 + Math.min(score / 500, 1) * 0.6) * 100,
+      ) / 100;
+    }
+    case 'acquire': {
+      const mrr = metrics['mrr'] ?? 0;
+      return Math.round(Math.min(mrr / 50000, 1) * 100) / 100;
+    }
+    case 'dealroom':
+    case 'open_startups': {
+      const mrr = metrics['mrr'] ?? metrics['moneyRaisedUsd'] ?? 0;
+      return Math.round(Math.min(mrr / 100000, 1) * 100) / 100;
+    }
+    case 'betalist':
+    case 'wellfound':
+    case 'saashub':
+    case 'alternativeto':
+    case 'starter_story': {
+      const score = metrics['score'] ?? metrics['upvotes'] ?? metrics['revenue'] ?? 0;
+      return Math.round(Math.min(score / 500, 1) * 100) / 100;
+    }
     default:
       return computeSignalStrength(metrics);
   }
@@ -328,6 +370,24 @@ function determineSignalType(
     // Pricing
     case 'pricing_tracker':
       return 'pricing_change';
+    // SaaS-specialized discovery
+    case 'betalist':
+    case 'wellfound':
+      return 'product_launch';
+    case 'alternativeto':
+    case 'saashub':
+      return 'market_entry';
+    case 'acquire':
+      return 'market_exit';
+    case 'dealroom':
+    case 'open_startups':
+      return 'funding_round';
+    case 'starter_story':
+      return 'community_buzz';
+    case 'ycombinator':
+      return 'product_launch';
+    case 'appsumo':
+      return 'market_entry';
     default:
       return 'community_buzz';
   }

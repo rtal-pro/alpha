@@ -223,4 +223,7 @@ export const SOURCE_RELIABILITY: Record<string, number> = {
   acquire: 0.80,
   open_startups: 0.82,
   starter_story: 0.65,
+  // Additional sources
+  ycombinator: 0.88,
+  serpapi_serp: 0.65,
 };

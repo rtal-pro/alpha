@@ -646,7 +646,8 @@ export class CrossReferenceEngine {
       .gte('detected_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString())
       .not('category', 'is', null);
 
-    const uniqueCategories = [...new Set((categories ?? []).map((c: { category: string }) => c.category))];
+    const rawCategories = (categories ?? []).map((c: { category: string }) => c.category) as string[];
+    const uniqueCategories: string[] = [...new Set(rawCategories)];
 
     // Evaluate crossing rules for each category
     const allMatches: CrossingMatch[] = [];

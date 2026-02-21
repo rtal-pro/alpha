@@ -58,9 +58,14 @@ import { DealroomScraper } from '../scrapers/dealroom.js';
 import { OpenStartupsScraper } from '../scrapers/open-startups.js';
 import { SaaSHubScraper } from '../scrapers/saashub.js';
 import { StarterStoryScraper } from '../scrapers/starter-story.js';
+// --- Previously missing scrapers ---
+import { AppSumoScraper } from '../scrapers/appsumo.js';
+import { YCombinatorScraper } from '../scrapers/ycombinator.js';
+import { PappersScraper } from '../scrapers/pappers.js';
+import { SerpAPISerpScraper } from '../scrapers/serpapi-serp.js';
 
 // ---------------------------------------------------------------------------
-// Scraper registry — all 36 scrapers registered
+// Scraper registry — all 40 scrapers registered
 // ---------------------------------------------------------------------------
 
 const scraperRegistry: Map<string, BaseScraper> = new Map();
@@ -115,6 +120,11 @@ registerScraper(new DealroomScraper());
 registerScraper(new OpenStartupsScraper());
 registerScraper(new SaaSHubScraper());
 registerScraper(new StarterStoryScraper());
+// Previously missing scrapers (now complete)
+registerScraper(new AppSumoScraper());
+registerScraper(new YCombinatorScraper());
+registerScraper(new PappersScraper());
+registerScraper(new SerpAPISerpScraper());
 
 function getScraperForSource(source: string): BaseScraper {
   const scraper = scraperRegistry.get(source);
