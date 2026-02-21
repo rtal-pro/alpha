@@ -156,6 +156,15 @@ export const CONCURRENCY: Record<string, number> = {
   malt: 1,
   // Pricing intelligence
   pricing_tracker: 1,
+  // SaaS-specialized discovery
+  betalist: 1,
+  alternativeto: 1,
+  acquire: 1,
+  wellfound: 1,
+  dealroom: 1,
+  open_startups: 1,
+  saashub: 1,
+  starter_story: 1,
   // Legacy / planned
   ycombinator: 1,
 };
@@ -205,4 +214,13 @@ export const SOURCE_RELIABILITY: Record<string, number> = {
   google_autocomplete: 0.60,
   // Price monitoring (high value but sparse)
   pricing_tracker: 0.85,
+  // SaaS-specialized discovery
+  dealroom: 0.88,
+  wellfound: 0.78,
+  betalist: 0.72,
+  alternativeto: 0.72,
+  saashub: 0.70,
+  acquire: 0.80,
+  open_startups: 0.82,
+  starter_story: 0.65,
 };

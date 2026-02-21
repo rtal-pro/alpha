@@ -49,9 +49,18 @@ import { UpworkScraper } from '../scrapers/upwork.js';
 import { MaltScraper } from '../scrapers/malt.js';
 // --- Pricing intelligence ---
 import { PricingTrackerScraper } from '../scrapers/pricing-tracker.js';
+// --- SaaS-specialized discovery ---
+import { BetaListScraper } from '../scrapers/betalist.js';
+import { AlternativeToScraper } from '../scrapers/alternativeto.js';
+import { AcquireScraper } from '../scrapers/acquire.js';
+import { WellfoundScraper } from '../scrapers/wellfound.js';
+import { DealroomScraper } from '../scrapers/dealroom.js';
+import { OpenStartupsScraper } from '../scrapers/open-startups.js';
+import { SaaSHubScraper } from '../scrapers/saashub.js';
+import { StarterStoryScraper } from '../scrapers/starter-story.js';
 
 // ---------------------------------------------------------------------------
-// Scraper registry — all 28 scrapers registered
+// Scraper registry — all 36 scrapers registered
 // ---------------------------------------------------------------------------
 
 const scraperRegistry: Map<string, BaseScraper> = new Map();
@@ -97,6 +106,15 @@ registerScraper(new UpworkScraper());
 registerScraper(new MaltScraper());
 // Pricing intelligence
 registerScraper(new PricingTrackerScraper());
+// SaaS-specialized discovery
+registerScraper(new BetaListScraper());
+registerScraper(new AlternativeToScraper());
+registerScraper(new AcquireScraper());
+registerScraper(new WellfoundScraper());
+registerScraper(new DealroomScraper());
+registerScraper(new OpenStartupsScraper());
+registerScraper(new SaaSHubScraper());
+registerScraper(new StarterStoryScraper());
 
 function getScraperForSource(source: string): BaseScraper {
   const scraper = scraperRegistry.get(source);

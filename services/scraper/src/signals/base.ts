@@ -19,7 +19,9 @@ export type ScrapeSource =
   | 'trustpilot' | 'shopify_apps' | 'chrome_webstore' | 'zapier'
   | 'similarweb' | 'builtwith'
   | 'eu_ted' | 'boamp'
-  | 'upwork' | 'malt' | 'pricing_tracker';
+  | 'upwork' | 'malt' | 'pricing_tracker'
+  | 'betalist' | 'alternativeto' | 'acquire' | 'wellfound'
+  | 'dealroom' | 'open_startups' | 'saashub' | 'starter_story';
 
 export interface DetectedSignal {
   signal_type: SignalType;

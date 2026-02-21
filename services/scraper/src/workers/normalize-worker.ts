@@ -49,11 +49,20 @@ import { UpworkTransformer } from '../transformers/upwork.js';
 import { MaltTransformer } from '../transformers/malt.js';
 // --- Pricing intelligence ---
 import { PricingTrackerTransformer } from '../transformers/pricing-tracker.js';
+// --- SaaS-specialized discovery ---
+import { BetaListTransformer } from '../transformers/betalist.js';
+import { AlternativeToTransformer } from '../transformers/alternativeto.js';
+import { AcquireTransformer } from '../transformers/acquire.js';
+import { WellfoundTransformer } from '../transformers/wellfound.js';
+import { DealroomTransformer } from '../transformers/dealroom.js';
+import { OpenStartupsTransformer } from '../transformers/open-startups.js';
+import { SaaSHubTransformer } from '../transformers/saashub.js';
+import { StarterStoryTransformer } from '../transformers/starter-story.js';
 
 import type { RawScrapedItem } from '../scrapers/base.js';
 
 // ---------------------------------------------------------------------------
-// Transformer registry — all 28 transformers registered
+// Transformer registry — all 36 transformers registered
 // ---------------------------------------------------------------------------
 
 const transformerRegistry: Map<string, BaseTransformer> = new Map();
@@ -99,6 +108,15 @@ registerTransformer(new UpworkTransformer());
 registerTransformer(new MaltTransformer());
 // Pricing intelligence
 registerTransformer(new PricingTrackerTransformer());
+// SaaS-specialized discovery
+registerTransformer(new BetaListTransformer());
+registerTransformer(new AlternativeToTransformer());
+registerTransformer(new AcquireTransformer());
+registerTransformer(new WellfoundTransformer());
+registerTransformer(new DealroomTransformer());
+registerTransformer(new OpenStartupsTransformer());
+registerTransformer(new SaaSHubTransformer());
+registerTransformer(new StarterStoryTransformer());
 
 function getTransformerForSource(source: string): BaseTransformer {
   const transformer = transformerRegistry.get(source);

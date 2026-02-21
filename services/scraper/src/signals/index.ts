@@ -14,6 +14,7 @@ import { FundingSurgeDetector } from './funding-surge.js';
 import { RegulatoryDeadlineDetector } from './regulatory-deadline.js';
 import { MarketConsolidationDetector } from './market-consolidation.js';
 import { EmergingTechAdoptionDetector } from './emerging-tech-adoption.js';
+import { SaaSExitDetector } from './saas-exit-detector.js';
 
 // Re-export types
 export type { DetectedSignal, NormalizedItem, SignalType, ScrapeSource } from './base.js';
@@ -35,6 +36,7 @@ const detectors: BaseSignalDetector[] = [
   new RegulatoryDeadlineDetector(),
   new MarketConsolidationDetector(),
   new EmergingTechAdoptionDetector(),
+  new SaaSExitDetector(),
 ];
 
 /**
