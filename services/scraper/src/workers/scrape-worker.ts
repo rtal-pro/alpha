@@ -12,6 +12,7 @@ import {
 } from '../config.js';
 import { redisConnection, type ScrapeJobData } from '../queue.js';
 import { BaseScraper, type RawScrapedItem } from '../scrapers/base.js';
+// --- Original scrapers ---
 import { RedditScraper } from '../scrapers/reddit.js';
 import { ProductHuntScraper } from '../scrapers/producthunt.js';
 import { GitHubScraper } from '../scrapers/github.js';
@@ -20,9 +21,37 @@ import { GoogleTrendsScraper } from '../scrapers/google-trends.js';
 import { EurLexScraper } from '../scrapers/eurlex.js';
 import { LegifranceScraper } from '../scrapers/legifrance.js';
 import { INSEEScraper } from '../scrapers/insee.js';
+// --- Community / social ---
+import { TwitterScraper } from '../scrapers/twitter.js';
+import { StackOverflowScraper } from '../scrapers/stackoverflow.js';
+import { IndieHackersScraper } from '../scrapers/indiehackers.js';
+// --- Search / trends ---
+import { GoogleAutocompleteScraper } from '../scrapers/google-autocomplete.js';
+// --- Reviews ---
+import { G2Scraper } from '../scrapers/g2.js';
+import { CapterraScraper } from '../scrapers/capterra.js';
+import { TrustpilotScraper } from '../scrapers/trustpilot.js';
+// --- Marketplaces ---
+import { ShopifyAppsScraper } from '../scrapers/shopify-apps.js';
+import { ChromeWebStoreScraper } from '../scrapers/chrome-webstore.js';
+import { ZapierScraper } from '../scrapers/zapier.js';
+// --- Funding / traffic ---
+import { CrunchbaseScraper } from '../scrapers/crunchbase.js';
+import { SimilarWebScraper } from '../scrapers/similarweb.js';
+import { BuiltWithScraper } from '../scrapers/builtwith.js';
+// --- Government / contracts ---
+import { DataGouvScraper } from '../scrapers/data-gouv.js';
+import { EUTedScraper } from '../scrapers/eu-ted.js';
+import { BOAMPScraper } from '../scrapers/boamp.js';
+// --- Jobs / freelance ---
+import { JobBoardScraper } from '../scrapers/job-boards.js';
+import { UpworkScraper } from '../scrapers/upwork.js';
+import { MaltScraper } from '../scrapers/malt.js';
+// --- Pricing intelligence ---
+import { PricingTrackerScraper } from '../scrapers/pricing-tracker.js';
 
 // ---------------------------------------------------------------------------
-// Scraper registry — add new scrapers here as they are implemented
+// Scraper registry — all 28 scrapers registered
 // ---------------------------------------------------------------------------
 
 const scraperRegistry: Map<string, BaseScraper> = new Map();
@@ -31,7 +60,7 @@ function registerScraper(scraper: BaseScraper): void {
   scraperRegistry.set(scraper.source, scraper);
 }
 
-// Register available scrapers
+// Original scrapers
 registerScraper(new RedditScraper());
 registerScraper(new ProductHuntScraper());
 registerScraper(new GitHubScraper());
@@ -40,6 +69,34 @@ registerScraper(new GoogleTrendsScraper());
 registerScraper(new EurLexScraper());
 registerScraper(new LegifranceScraper());
 registerScraper(new INSEEScraper());
+// Community / social
+registerScraper(new TwitterScraper());
+registerScraper(new StackOverflowScraper());
+registerScraper(new IndieHackersScraper());
+// Search / trends
+registerScraper(new GoogleAutocompleteScraper());
+// Reviews
+registerScraper(new G2Scraper());
+registerScraper(new CapterraScraper());
+registerScraper(new TrustpilotScraper());
+// Marketplaces
+registerScraper(new ShopifyAppsScraper());
+registerScraper(new ChromeWebStoreScraper());
+registerScraper(new ZapierScraper());
+// Funding / traffic
+registerScraper(new CrunchbaseScraper());
+registerScraper(new SimilarWebScraper());
+registerScraper(new BuiltWithScraper());
+// Government / contracts
+registerScraper(new DataGouvScraper());
+registerScraper(new EUTedScraper());
+registerScraper(new BOAMPScraper());
+// Jobs / freelance
+registerScraper(new JobBoardScraper());
+registerScraper(new UpworkScraper());
+registerScraper(new MaltScraper());
+// Pricing intelligence
+registerScraper(new PricingTrackerScraper());
 
 function getScraperForSource(source: string): BaseScraper {
   const scraper = scraperRegistry.get(source);

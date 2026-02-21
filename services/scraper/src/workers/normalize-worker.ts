@@ -12,6 +12,7 @@ import {
 } from '../config.js';
 import { redisConnection, type NormalizeJobData } from '../queue.js';
 import { BaseTransformer, type NormalizedItem } from '../transformers/base.js';
+// --- Original transformers ---
 import { RedditTransformer } from '../transformers/reddit.js';
 import { ProductHuntTransformer } from '../transformers/producthunt.js';
 import { GitHubTransformer } from '../transformers/github.js';
@@ -20,10 +21,39 @@ import { GoogleTrendsTransformer } from '../transformers/google-trends.js';
 import { EurLexTransformer } from '../transformers/eurlex.js';
 import { LegifranceTransformer } from '../transformers/legifrance.js';
 import { INSEETransformer } from '../transformers/insee.js';
+// --- Community / social ---
+import { TwitterTransformer } from '../transformers/twitter.js';
+import { StackOverflowTransformer } from '../transformers/stackoverflow.js';
+import { IndieHackersTransformer } from '../transformers/indiehackers.js';
+// --- Search / trends ---
+import { GoogleAutocompleteTransformer } from '../transformers/google-autocomplete.js';
+// --- Reviews ---
+import { G2Transformer } from '../transformers/g2.js';
+import { CapterraTransformer } from '../transformers/capterra.js';
+import { TrustpilotTransformer } from '../transformers/trustpilot.js';
+// --- Marketplaces ---
+import { ShopifyAppsTransformer } from '../transformers/shopify-apps.js';
+import { ChromeWebStoreTransformer } from '../transformers/chrome-webstore.js';
+import { ZapierTransformer } from '../transformers/zapier.js';
+// --- Funding / traffic ---
+import { CrunchbaseTransformer } from '../transformers/crunchbase.js';
+import { SimilarWebTransformer } from '../transformers/similarweb.js';
+import { BuiltWithTransformer } from '../transformers/builtwith.js';
+// --- Government / contracts ---
+import { DataGouvTransformer } from '../transformers/data-gouv.js';
+import { EUTedTransformer } from '../transformers/eu-ted.js';
+import { BOAMPTransformer } from '../transformers/boamp.js';
+// --- Jobs / freelance ---
+import { JobBoardsTransformer } from '../transformers/job-boards.js';
+import { UpworkTransformer } from '../transformers/upwork.js';
+import { MaltTransformer } from '../transformers/malt.js';
+// --- Pricing intelligence ---
+import { PricingTrackerTransformer } from '../transformers/pricing-tracker.js';
+
 import type { RawScrapedItem } from '../scrapers/base.js';
 
 // ---------------------------------------------------------------------------
-// Transformer registry
+// Transformer registry — all 28 transformers registered
 // ---------------------------------------------------------------------------
 
 const transformerRegistry: Map<string, BaseTransformer> = new Map();
@@ -32,6 +62,7 @@ function registerTransformer(transformer: BaseTransformer): void {
   transformerRegistry.set(transformer.source, transformer);
 }
 
+// Original transformers
 registerTransformer(new RedditTransformer());
 registerTransformer(new ProductHuntTransformer());
 registerTransformer(new GitHubTransformer());
@@ -40,6 +71,34 @@ registerTransformer(new GoogleTrendsTransformer());
 registerTransformer(new EurLexTransformer());
 registerTransformer(new LegifranceTransformer());
 registerTransformer(new INSEETransformer());
+// Community / social
+registerTransformer(new TwitterTransformer());
+registerTransformer(new StackOverflowTransformer());
+registerTransformer(new IndieHackersTransformer());
+// Search / trends
+registerTransformer(new GoogleAutocompleteTransformer());
+// Reviews
+registerTransformer(new G2Transformer());
+registerTransformer(new CapterraTransformer());
+registerTransformer(new TrustpilotTransformer());
+// Marketplaces
+registerTransformer(new ShopifyAppsTransformer());
+registerTransformer(new ChromeWebStoreTransformer());
+registerTransformer(new ZapierTransformer());
+// Funding / traffic
+registerTransformer(new CrunchbaseTransformer());
+registerTransformer(new SimilarWebTransformer());
+registerTransformer(new BuiltWithTransformer());
+// Government / contracts
+registerTransformer(new DataGouvTransformer());
+registerTransformer(new EUTedTransformer());
+registerTransformer(new BOAMPTransformer());
+// Jobs / freelance
+registerTransformer(new JobBoardsTransformer());
+registerTransformer(new UpworkTransformer());
+registerTransformer(new MaltTransformer());
+// Pricing intelligence
+registerTransformer(new PricingTrackerTransformer());
 
 function getTransformerForSource(source: string): BaseTransformer {
   const transformer = transformerRegistry.get(source);
@@ -127,26 +186,133 @@ function computeSignalStrength(metrics: Record<string, number>): number {
 }
 
 /**
+ * Compute a source-aware signal strength (0-1).
+ * Extends the default heuristic for sources beyond Reddit.
+ */
+function computeSourceAwareStrength(
+  source: string,
+  metrics: Record<string, number>,
+): number {
+  // Source-specific strength computation
+  switch (source) {
+    case 'twitter': {
+      const engagement = metrics['engagement'] ?? 0;
+      const followers = metrics['authorFollowers'] ?? 0;
+      return Math.round(
+        (Math.min(engagement / 500, 1) * 0.6 + Math.min(followers / 50000, 1) * 0.4) * 100,
+      ) / 100;
+    }
+    case 'stackoverflow': {
+      const views = metrics['viewCount'] ?? 0;
+      const score = metrics['score'] ?? 0;
+      return Math.round(
+        (Math.min(views / 10000, 1) * 0.5 + Math.min(score / 100, 1) * 0.5) * 100,
+      ) / 100;
+    }
+    case 'crunchbase': {
+      const raised = metrics['moneyRaisedUsd'] ?? 0;
+      return Math.round(Math.min(raised / 50_000_000, 1) * 100) / 100;
+    }
+    case 'similarweb': {
+      const visits = metrics['monthlyVisits'] ?? 0;
+      return Math.round(Math.min(visits / 5_000_000, 1) * 100) / 100;
+    }
+    case 'serpapi_g2':
+    case 'serpapi_capterra':
+    case 'trustpilot': {
+      const rating = metrics['rating'] ?? 0;
+      const reviews = metrics['reviewCount'] ?? 0;
+      return Math.round(
+        (Math.min(reviews / 500, 1) * 0.6 + (rating / 5) * 0.4) * 100,
+      ) / 100;
+    }
+    case 'shopify_apps':
+    case 'chrome_webstore': {
+      const reviews = metrics['reviewCount'] ?? metrics['users'] ?? 0;
+      return Math.round(Math.min(reviews / 10000, 1) * 100) / 100;
+    }
+    case 'google_autocomplete': {
+      const intentScore = metrics['intentScore'] ?? 0;
+      return Math.round(Math.min(intentScore / 100, 1) * 100) / 100;
+    }
+    case 'pricing_tracker': {
+      const changes = (metrics['priceIncrease'] ?? 0) +
+        (metrics['freeTierRemoved'] ?? 0) +
+        (metrics['newTiersAdded'] ?? 0) +
+        (metrics['featureGatingChanged'] ?? 0);
+      return Math.round(Math.min(changes / 3, 1) * 100) / 100;
+    }
+    default:
+      return computeSignalStrength(metrics);
+  }
+}
+
+/**
  * Determine the signal type based on the source and metrics.
  */
 function determineSignalType(
   source: string,
   metrics: Record<string, number>,
 ): string {
-  const score = metrics['score'] ?? 0;
-  const comments = metrics['numComments'] ?? 0;
-
-  if (source === 'reddit') {
-    if (score > 200 || comments > 50) return 'community_buzz';
-    return 'community_buzz';
+  switch (source) {
+    // Community / social
+    case 'reddit':
+    case 'hacker_news':
+    case 'indiehackers':
+      return 'community_buzz';
+    case 'twitter':
+      return 'community_buzz';
+    case 'stackoverflow':
+      return 'pain_point_cluster';
+    // Product directories
+    case 'producthunt':
+      return 'product_launch';
+    case 'shopify_apps':
+    case 'chrome_webstore':
+    case 'zapier':
+      return 'market_entry';
+    // Reviews
+    case 'serpapi_g2':
+    case 'serpapi_capterra':
+    case 'trustpilot':
+      return 'review_surge';
+    // Code & OSS
+    case 'github':
+      return 'oss_traction';
+    // Search & trends
+    case 'google_trends':
+    case 'google_autocomplete':
+      return 'search_trend';
+    case 'serpapi_serp':
+      return 'search_trend';
+    // Funding & traffic
+    case 'crunchbase':
+      return 'funding_round';
+    case 'similarweb':
+      return 'traffic_spike';
+    case 'builtwith':
+      return 'oss_traction';
+    // Government / regulatory
+    case 'eurlex':
+    case 'legifrance':
+    case 'eu_ted':
+    case 'boamp':
+    case 'data_gouv':
+      return 'regulatory_event';
+    case 'insee':
+    case 'pappers':
+      return 'company_registration';
+    // Jobs / freelance
+    case 'job_boards':
+    case 'upwork':
+    case 'malt':
+      return 'market_entry';
+    // Pricing
+    case 'pricing_tracker':
+      return 'pricing_change';
+    default:
+      return 'community_buzz';
   }
-  if (source === 'producthunt') return 'product_launch';
-  if (source === 'github') return 'oss_traction';
-  if (source === 'hacker_news') return 'community_buzz';
-  if (source === 'google_trends') return 'search_spike';
-  if (source === 'eurlex' || source === 'legifrance') return 'regulatory_change';
-  if (source === 'insee') return 'market_data';
-  return 'community_buzz';
 }
 
 // ---------------------------------------------------------------------------
@@ -426,6 +592,8 @@ async function insertReviews(reviewRows: ReviewRow[]): Promise<number> {
 const REVIEW_SOURCES = new Set([
   'serpapi_g2',
   'serpapi_capterra',
+  'trustpilot',
+  'shopify_apps',
   'appsumo',
 ]);
 
@@ -495,7 +663,7 @@ async function processNormalizeJob(job: Job<NormalizeJobData>): Promise<void> {
 
       // Build signal row
       const signalType = determineSignalType(item.source, item.metrics);
-      const strength = computeSignalStrength(item.metrics);
+      const strength = computeSourceAwareStrength(item.source, item.metrics);
 
       allSignals.push({
         signal_type: signalType,
