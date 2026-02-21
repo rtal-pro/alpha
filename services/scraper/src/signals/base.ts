@@ -5,7 +5,9 @@
 export type SignalType =
   | 'product_launch' | 'funding_round' | 'traffic_spike' | 'review_surge'
   | 'community_buzz' | 'regulatory_event' | 'oss_traction' | 'company_registration'
-  | 'pricing_change' | 'pain_point_cluster' | 'search_trend' | 'market_entry' | 'market_exit';
+  | 'pricing_change' | 'pain_point_cluster' | 'search_trend' | 'market_entry' | 'market_exit'
+  | 'api_deprecation' | 'funding_surge' | 'regulatory_deadline'
+  | 'market_consolidation' | 'emerging_tech_adoption';
 
 export type ScrapeSource =
   | 'reddit' | 'producthunt' | 'github' | 'google_trends' | 'hacker_news'

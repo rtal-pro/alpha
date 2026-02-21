@@ -9,6 +9,11 @@ import { SearchTrendSurgeDetector } from './search-trend-surge.js';
 import { OSSCommercialGapDetector } from './oss-commercial-gap.js';
 import { PricingFrustrationDetector } from './pricing-frustration.js';
 import { TalentDemandDetector } from './talent-demand.js';
+import { APIDeprecationDetector } from './api-deprecation.js';
+import { FundingSurgeDetector } from './funding-surge.js';
+import { RegulatoryDeadlineDetector } from './regulatory-deadline.js';
+import { MarketConsolidationDetector } from './market-consolidation.js';
+import { EmergingTechAdoptionDetector } from './emerging-tech-adoption.js';
 
 // Re-export types
 export type { DetectedSignal, NormalizedItem, SignalType, ScrapeSource } from './base.js';
@@ -25,6 +30,11 @@ const detectors: BaseSignalDetector[] = [
   new OSSCommercialGapDetector(),
   new PricingFrustrationDetector(),
   new TalentDemandDetector(),
+  new APIDeprecationDetector(),
+  new FundingSurgeDetector(),
+  new RegulatoryDeadlineDetector(),
+  new MarketConsolidationDetector(),
+  new EmergingTechAdoptionDetector(),
 ];
 
 /**

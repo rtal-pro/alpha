@@ -19,7 +19,10 @@ export interface GeneratedOpportunity {
   title: string;
   category: string;
   description: string;
-  type: 'geo_gap' | 'regulatory_gap' | 'convergence' | 'competitor_weakness';
+  type:
+    | 'geo_gap' | 'regulatory_gap' | 'convergence' | 'competitor_weakness'
+    | 'api_sunset_gap' | 'funding_follows_pain' | 'talent_migration'
+    | 'platform_risk';
   composite_score: number;
   growth_score: number;
   gap_score: number;
@@ -48,22 +51,34 @@ export class OpportunityGenerator {
   }
 
   /**
-   * Run all 4 opportunity generation paths and return candidates.
+   * Run all 8 opportunity generation paths and return candidates.
    */
   async generateAll(): Promise<GeneratedOpportunity[]> {
-    const [geoGaps, regulatoryGaps, convergences, weaknesses] = await Promise.all([
+    const [
+      geoGaps, regulatoryGaps, convergences, weaknesses,
+      apiSunsetGaps, fundingFollowsPain, talentMigrations, platformRisks,
+    ] = await Promise.all([
       this.detectGeoGaps(),
       this.detectRegulatoryGaps(),
       this.detectConvergences(),
       this.detectCompetitorWeaknesses(),
+      this.detectAPISunsetGaps(),
+      this.detectFundingFollowsPain(),
+      this.detectTalentMigration(),
+      this.detectPlatformRisk(),
     ]);
 
-    const all = [...geoGaps, ...regulatoryGaps, ...convergences, ...weaknesses];
+    const all = [
+      ...geoGaps, ...regulatoryGaps, ...convergences, ...weaknesses,
+      ...apiSunsetGaps, ...fundingFollowsPain, ...talentMigrations, ...platformRisks,
+    ];
 
     console.log(
       `[opportunity-gen] Generated ${all.length} opportunities: ` +
       `${geoGaps.length} geo_gap, ${regulatoryGaps.length} regulatory_gap, ` +
-      `${convergences.length} convergence, ${weaknesses.length} competitor_weakness`,
+      `${convergences.length} convergence, ${weaknesses.length} competitor_weakness, ` +
+      `${apiSunsetGaps.length} api_sunset_gap, ${fundingFollowsPain.length} funding_follows_pain, ` +
+      `${talentMigrations.length} talent_migration, ${platformRisks.length} platform_risk`,
     );
 
     return all;
@@ -462,8 +477,360 @@ export class OpportunityGenerator {
   }
 
   // -----------------------------------------------------------------------
+  // Path 5: API Sunset Gap — when an API/platform is deprecated,
+  // replacement tools become high-value opportunities
+  // -----------------------------------------------------------------------
+
+  private async detectAPISunsetGaps(): Promise<GeneratedOpportunity[]> {
+    const cutoff = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000);
+
+    const { data: apiSignals } = await this.supabase
+      .from('signals')
+      .select('*')
+      .eq('signal_type', 'api_deprecation')
+      .gte('detected_at', cutoff.toISOString())
+      .gte('strength', 30)
+      .order('strength', { ascending: false })
+      .limit(30);
+
+    if (!apiSignals || apiSignals.length === 0) return [];
+
+    const opportunities: GeneratedOpportunity[] = [];
+
+    // Group by category — multiple API deprecations in same space = strong signal
+    const byCategory = new Map<string, typeof apiSignals>();
+    for (const s of apiSignals) {
+      const cat = s.category ?? 'general_saas';
+      const group = byCategory.get(cat) ?? [];
+      group.push(s);
+      byCategory.set(cat, group);
+    }
+
+    for (const [category, signals] of byCategory) {
+      const avgStrength = signals.reduce(
+        (sum: number, s: { strength: number }) => sum + s.strength, 0,
+      ) / signals.length;
+
+      const platforms = signals
+        .map((s: { evidence: Record<string, unknown> }) =>
+          (s.evidence?.['platform'] as string) ?? 'unknown')
+        .filter((p: string) => p !== 'unknown');
+      const uniquePlatforms = [...new Set(platforms)];
+
+      // Also check for related pain point signals in this category
+      const { count: relatedPainCount } = await this.supabase
+        .from('signals')
+        .select('id', { count: 'exact', head: true })
+        .eq('category', category)
+        .eq('signal_type', 'pain_point_cluster')
+        .gte('detected_at', cutoff.toISOString());
+
+      const painBoost = Math.min(20, (relatedPainCount ?? 0) * 5);
+
+      opportunities.push({
+        title: `API sunset gap: ${category}${uniquePlatforms.length > 0 ? ` (${uniquePlatforms.slice(0, 3).join(', ')})` : ''}`,
+        category,
+        description:
+          `${signals.length} API deprecation signals in "${category}". ` +
+          `${uniquePlatforms.length > 0 ? `Affected platforms: ${uniquePlatforms.join(', ')}. ` : ''}` +
+          `${(relatedPainCount ?? 0) > 0 ? `${relatedPainCount} related pain points detected. ` : ''}` +
+          `Users displaced by API changes need replacement tools.`,
+        type: 'api_sunset_gap',
+        composite_score: Math.min(100, Math.round(avgStrength + painBoost)),
+        growth_score: Math.round(avgStrength),
+        gap_score: Math.min(100, signals.length * 20),
+        regulatory_score: 0,
+        feasibility_score: 65,
+        source_products: [],
+        source_signals: signals.map((s: { id: string }) => s.id),
+        source_regulations: [],
+        evidence_summary: {
+          signal_count: signals.length,
+          avg_strength: Math.round(avgStrength),
+          affected_platforms: uniquePlatforms,
+          related_pain_count: relatedPainCount ?? 0,
+        },
+        target_geo: 'GLOBAL',
+        status: 'new',
+      });
+    }
+
+    return opportunities;
+  }
+
+  // -----------------------------------------------------------------------
+  // Path 6: Funding Follows Pain — when VCs fund a category where
+  // pain points are also spiking, it validates the market
+  // -----------------------------------------------------------------------
+
+  private async detectFundingFollowsPain(): Promise<GeneratedOpportunity[]> {
+    const cutoff = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000);
+
+    // Get categories with both funding surges AND pain points
+    const { data: fundingSignals } = await this.supabase
+      .from('signals')
+      .select('*')
+      .eq('signal_type', 'funding_surge')
+      .gte('detected_at', cutoff.toISOString())
+      .gte('strength', 30);
+
+    if (!fundingSignals || fundingSignals.length === 0) return [];
+
+    const opportunities: GeneratedOpportunity[] = [];
+
+    for (const funding of fundingSignals) {
+      const category = funding.category;
+
+      // Check for pain point cluster signals in the same category
+      const { data: painSignals } = await this.supabase
+        .from('signals')
+        .select('*')
+        .eq('category', category)
+        .in('signal_type', ['pain_point_cluster', 'pricing_change', 'community_buzz'])
+        .gte('detected_at', cutoff.toISOString())
+        .gte('strength', 25)
+        .limit(20);
+
+      if (!painSignals || painSignals.length < 2) continue;
+
+      const avgPainStrength = painSignals.reduce(
+        (sum: number, s: { strength: number }) => sum + s.strength, 0,
+      ) / painSignals.length;
+
+      const fundingEvidence = funding.evidence as Record<string, unknown> | null;
+      const totalRaised = (fundingEvidence?.['total_raised_usd'] as number) ?? 0;
+      const uniqueCompanies = (fundingEvidence?.['unique_companies'] as number) ?? 0;
+
+      const compositeScore = Math.min(100, Math.round(
+        (funding.strength * 0.4) +
+        (avgPainStrength * 0.4) +
+        (Math.min(100, painSignals.length * 10) * 0.2),
+      ));
+
+      opportunities.push({
+        title: `Funding + pain: ${category} ($${this.formatAmount(totalRaised)} raised, ${painSignals.length} pain signals)`,
+        category,
+        description:
+          `${uniqueCompanies} companies raised $${this.formatAmount(totalRaised)} in "${category}" ` +
+          `while ${painSignals.length} pain/frustration signals detected. ` +
+          `VC-validated market with clear user problems to solve.`,
+        type: 'funding_follows_pain',
+        composite_score: compositeScore,
+        growth_score: funding.strength,
+        gap_score: Math.round(avgPainStrength),
+        regulatory_score: 0,
+        feasibility_score: 55,
+        source_products: [],
+        source_signals: [
+          funding.id,
+          ...painSignals.map((s: { id: string }) => s.id).slice(0, 15),
+        ],
+        source_regulations: [],
+        evidence_summary: {
+          funding_strength: funding.strength,
+          total_raised: totalRaised,
+          unique_companies: uniqueCompanies,
+          pain_signal_count: painSignals.length,
+          avg_pain_strength: Math.round(avgPainStrength),
+          pain_types: [...new Set(painSignals.map((s: { signal_type: string }) => s.signal_type))],
+        },
+        target_geo: 'FR',
+        status: 'new',
+      });
+    }
+
+    return opportunities;
+  }
+
+  // -----------------------------------------------------------------------
+  // Path 7: Talent Migration — when job postings cluster in an
+  // emerging category AND community buzz is growing, the market is forming
+  // -----------------------------------------------------------------------
+
+  private async detectTalentMigration(): Promise<GeneratedOpportunity[]> {
+    const cutoff = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000);
+
+    // Find categories with talent demand (market_entry from job boards)
+    const { data: talentSignals } = await this.supabase
+      .from('signals')
+      .select('*')
+      .eq('signal_type', 'market_entry')
+      .gte('detected_at', cutoff.toISOString())
+      .gte('strength', 30)
+      .limit(20);
+
+    if (!talentSignals || talentSignals.length === 0) return [];
+
+    const opportunities: GeneratedOpportunity[] = [];
+
+    for (const talent of talentSignals) {
+      const category = talent.category;
+
+      // Cross-reference with emerging tech adoption signals
+      const { data: techSignals } = await this.supabase
+        .from('signals')
+        .select('*')
+        .eq('category', category)
+        .in('signal_type', ['emerging_tech_adoption', 'community_buzz', 'search_trend'])
+        .gte('detected_at', cutoff.toISOString())
+        .gte('strength', 20)
+        .limit(15);
+
+      if (!techSignals || techSignals.length < 1) continue;
+
+      const avgTechStrength = techSignals.reduce(
+        (sum: number, s: { strength: number }) => sum + s.strength, 0,
+      ) / techSignals.length;
+
+      const talentEvidence = talent.evidence as Record<string, unknown> | null;
+      const postingCount = (talentEvidence?.['posting_count'] as number) ?? 0;
+      const uniqueCompanies = (talentEvidence?.['unique_companies'] as number) ?? 0;
+
+      const compositeScore = Math.min(100, Math.round(
+        (talent.strength * 0.45) +
+        (avgTechStrength * 0.35) +
+        (Math.min(100, techSignals.length * 15) * 0.20),
+      ));
+
+      opportunities.push({
+        title: `Talent migration: ${category} (${postingCount} jobs, ${techSignals.length} tech signals)`,
+        category,
+        description:
+          `${postingCount} job postings from ${uniqueCompanies} companies hiring in "${category}" ` +
+          `combined with ${techSignals.length} emerging tech/community signals. ` +
+          `Market is forming — early movers can capture the ecosystem.`,
+        type: 'talent_migration',
+        composite_score: compositeScore,
+        growth_score: Math.round(avgTechStrength),
+        gap_score: 0,
+        regulatory_score: 0,
+        feasibility_score: 60,
+        source_products: [],
+        source_signals: [
+          talent.id,
+          ...techSignals.map((s: { id: string }) => s.id).slice(0, 10),
+        ],
+        source_regulations: [],
+        evidence_summary: {
+          posting_count: postingCount,
+          unique_companies: uniqueCompanies,
+          talent_strength: talent.strength,
+          tech_signal_count: techSignals.length,
+          avg_tech_strength: Math.round(avgTechStrength),
+          signal_types: [...new Set(techSignals.map((s: { signal_type: string }) => s.signal_type))],
+        },
+        target_geo: 'FR',
+        status: 'new',
+      });
+    }
+
+    return opportunities;
+  }
+
+  // -----------------------------------------------------------------------
+  // Path 8: Platform Risk — when a dominant platform consolidates or
+  // changes policies, dependent businesses need alternatives
+  // -----------------------------------------------------------------------
+
+  private async detectPlatformRisk(): Promise<GeneratedOpportunity[]> {
+    const cutoff = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000);
+
+    // Find market consolidation signals
+    const { data: consolidationSignals } = await this.supabase
+      .from('signals')
+      .select('*')
+      .in('signal_type', ['market_consolidation', 'api_deprecation'])
+      .gte('detected_at', cutoff.toISOString())
+      .gte('strength', 30)
+      .order('strength', { ascending: false })
+      .limit(30);
+
+    if (!consolidationSignals || consolidationSignals.length === 0) return [];
+
+    // Group by category
+    const byCategory = new Map<string, typeof consolidationSignals>();
+    for (const s of consolidationSignals) {
+      const cat = s.category ?? 'general_saas';
+      const group = byCategory.get(cat) ?? [];
+      group.push(s);
+      byCategory.set(cat, group);
+    }
+
+    const opportunities: GeneratedOpportunity[] = [];
+
+    for (const [category, signals] of byCategory) {
+      // Check for customer concern signals (pain points + community buzz in same category)
+      const { data: concernSignals } = await this.supabase
+        .from('signals')
+        .select('*')
+        .eq('category', category)
+        .in('signal_type', ['pain_point_cluster', 'community_buzz', 'search_trend', 'pricing_change'])
+        .gte('detected_at', cutoff.toISOString())
+        .gte('strength', 20)
+        .limit(20);
+
+      if (!concernSignals || concernSignals.length < 1) continue;
+
+      const avgConsolidationStrength = signals.reduce(
+        (sum: number, s: { strength: number }) => sum + s.strength, 0,
+      ) / signals.length;
+      const avgConcernStrength = concernSignals.reduce(
+        (sum: number, s: { strength: number }) => sum + s.strength, 0,
+      ) / concernSignals.length;
+
+      const compositeScore = Math.min(100, Math.round(
+        (avgConsolidationStrength * 0.45) +
+        (avgConcernStrength * 0.35) +
+        (Math.min(100, (signals.length + concernSignals.length) * 8) * 0.20),
+      ));
+
+      const consolidationTypes = [...new Set(signals.map((s: { signal_type: string }) => s.signal_type))];
+
+      opportunities.push({
+        title: `Platform risk: ${category} (${signals.length} consolidation + ${concernSignals.length} concern signals)`,
+        category,
+        description:
+          `${signals.length} market consolidation/API deprecation signals in "${category}" ` +
+          `combined with ${concernSignals.length} user concern signals. ` +
+          `Platform disruption creates window for independent alternatives.`,
+        type: 'platform_risk',
+        composite_score: compositeScore,
+        growth_score: Math.round(avgConcernStrength),
+        gap_score: Math.round(avgConsolidationStrength),
+        regulatory_score: 0,
+        feasibility_score: 55,
+        source_products: [],
+        source_signals: [
+          ...signals.map((s: { id: string }) => s.id),
+          ...concernSignals.map((s: { id: string }) => s.id).slice(0, 10),
+        ],
+        source_regulations: [],
+        evidence_summary: {
+          consolidation_signal_count: signals.length,
+          concern_signal_count: concernSignals.length,
+          consolidation_types: consolidationTypes,
+          avg_consolidation_strength: Math.round(avgConsolidationStrength),
+          avg_concern_strength: Math.round(avgConcernStrength),
+          concern_types: [...new Set(concernSignals.map((s: { signal_type: string }) => s.signal_type))],
+        },
+        target_geo: 'GLOBAL',
+        status: 'new',
+      });
+    }
+
+    return opportunities;
+  }
+
+  // -----------------------------------------------------------------------
   // Helpers
   // -----------------------------------------------------------------------
+
+  private formatAmount(amount: number): string {
+    if (amount >= 1_000_000_000) return `${(amount / 1_000_000_000).toFixed(1)}B`;
+    if (amount >= 1_000_000) return `${(amount / 1_000_000).toFixed(1)}M`;
+    if (amount >= 1_000) return `${(amount / 1_000).toFixed(0)}K`;
+    return String(amount);
+  }
 
   private inferTypeFromRule(ruleName: string): GeneratedOpportunity['type'] {
     if (ruleName.includes('regulatory') || ruleName.includes('compliance') || ruleName.includes('forced')) {
@@ -474,6 +841,18 @@ export class OpportunityGenerator {
     }
     if (ruleName.includes('convergence')) {
       return 'convergence';
+    }
+    if (ruleName.includes('api_sunset') || ruleName.includes('deprecation')) {
+      return 'api_sunset_gap';
+    }
+    if (ruleName.includes('funding_pain') || ruleName.includes('funding_follows')) {
+      return 'funding_follows_pain';
+    }
+    if (ruleName.includes('talent') || ruleName.includes('migration')) {
+      return 'talent_migration';
+    }
+    if (ruleName.includes('platform') || ruleName.includes('consolidation')) {
+      return 'platform_risk';
     }
     return 'competitor_weakness';
   }
