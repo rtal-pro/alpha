@@ -30,9 +30,9 @@ This updated audit consolidates findings from 5 parallel deep-dive audits across
 ### Risk Assessment
 
 - **8 CRITICAL** findings
-- **12 HIGH** severity issues
-- **24 MEDIUM** severity issues
-- **8 LOW** severity issues
+- **13 HIGH** severity issues
+- **27 MEDIUM** severity issues
+- **12 LOW** severity issues
 - **0 tests** in ~27,600 lines of code
 
 ---
@@ -348,9 +348,14 @@ LLM-generated content rendered without sanitization. Must use DOMPurify or equiv
 | Severity | Issue | Details |
 |----------|-------|---------|
 | HIGH | **Missing `pino-pretty`** dependency | Used in scraper server dev transport but not in package.json |
+| HIGH | **Missing `build` scripts in library packages** | `packages/{db,llm,scoring,shared}` have no `build` script — `turbo build` may fail |
 | MEDIUM | **No lockfile committed** | Non-deterministic builds |
+| MEDIUM | **`turbo lint` declared but no lint config exists** | No `.eslintrc`, no lint scripts in library packages — lint task fails |
+| MEDIUM | **Docker COPY path resolution risk** | `services/scraper/Dockerfile` — tsconfig.base.json path may not resolve correctly in container |
 | LOW | Inconsistent tsconfig includes | `["src"]` vs `["src/**/*.ts"]` across packages |
-| LOW | Inconsistent path style | `dist/src` vs `./dist/./src` |
+| LOW | Inconsistent path style | Scraper uses `dist/src` vs `./dist/./src` elsewhere |
+| LOW | No `.prettierrc` or formatting config | No code formatting standard enforced |
+| LOW | No `.nvmrc` | Node.js version only specified in package.json engines, not locked for nvm users |
 
 ### Key Dependencies
 - Next.js 14.2, React 18.3, TailwindCSS 3.4
@@ -462,40 +467,44 @@ Critical untested paths:
 15. **Add test suite** — Unit tests for scoring, signals, dedup, cost tracking, API routes (target 80%+ on critical paths)
 16. **Commit lockfile** — `npm install` and commit `package-lock.json`
 17. **Add missing `pino-pretty`** dependency to scraper service
-18. **Add database constraints** — CHECK on all score columns, NOT NULL on required fields, temporal constraints
-19. **Add CSRF protection** on all POST routes
-20. **Set up CI/CD** — GitHub Actions with lint, type-check, test, build stages
+18. **Add `build` scripts** to `packages/{db,llm,scoring,shared}` — add `"build": "tsc"` to each
+19. **Add database constraints** — CHECK on all score columns, NOT NULL on required fields, temporal constraints
+20. **Add CSRF protection** on all POST routes
+21. **Set up CI/CD** — GitHub Actions with lint, type-check, test, build stages
 
 ### P2 — Medium (Production Hardening)
 
-21. Add security headers (CSP, HSTS, X-Frame-Options)
-22. Implement structured logging with trace IDs (replace console.log)
-23. Add fetch timeouts to all external API calls
-24. Convert UUID array columns to junction tables
-25. Add circuit breaker pattern for external APIs
-26. Add global rate limiter across concurrent scrapers
-27. Reduce scraper/transformer code duplication
-28. Expand health checker to 5+ sources (not just Reddit)
-29. Add cron job error logging table
-30. Add JSON parse error handling on all POST routes
-31. Fix scoring edge cases (recency overflow, velocity inflation)
-32. Add URL validation in base scraper
-33. Fix LLM enrichment to fail loudly on parse errors
-34. Add LIMIT protection to `match_opportunities()` function
-35. Move `pg_net` extension to migration 001
+22. Add security headers (CSP, HSTS, X-Frame-Options)
+23. Implement structured logging with trace IDs (replace console.log)
+24. Add fetch timeouts to all external API calls
+25. Convert UUID array columns to junction tables
+26. Add circuit breaker pattern for external APIs
+27. Add global rate limiter across concurrent scrapers
+28. Reduce scraper/transformer code duplication
+29. Expand health checker to 5+ sources (not just Reddit)
+30. Add cron job error logging table
+31. Add JSON parse error handling on all POST routes
+32. Fix scoring edge cases (recency overflow, velocity inflation)
+33. Add URL validation in base scraper
+34. Fix LLM enrichment to fail loudly on parse errors
+35. Add LIMIT protection to `match_opportunities()` function
+36. Move `pg_net` extension to migration 001
+37. Add ESLint + Prettier configuration across all packages
+38. Fix Docker COPY path resolution for tsconfig.base.json
 
 ### P3 — Low (Nice to Have)
 
-36. Add API documentation (OpenAPI/Swagger)
-37. Set up monitoring (Prometheus + Grafana)
-38. Add distributed tracing (OpenTelemetry)
-39. Implement secret rotation policy
-40. Add docker-compose for local development
-41. Create architecture decision records (ADRs)
-42. Tighten shared package types (replace `Record<string, unknown>`)
-43. Add time-based partitioning to raw_events table
-44. Document rollback procedures for migrations
-45. Randomize browser pool geolocation
+39. Add API documentation (OpenAPI/Swagger)
+40. Set up monitoring (Prometheus + Grafana)
+41. Add distributed tracing (OpenTelemetry)
+42. Implement secret rotation policy
+43. Add docker-compose for local development
+44. Create architecture decision records (ADRs)
+45. Tighten shared package types (replace `Record<string, unknown>`)
+46. Add time-based partitioning to raw_events table
+47. Document rollback procedures for migrations
+48. Randomize browser pool geolocation
+49. Add `.nvmrc` for Node.js version locking
 
 ---
 
@@ -527,5 +536,5 @@ Critical untested paths:
 | Scraper Service | 1 | 4 | 7 | 2 | 14 |
 | Database | 1 | 0 | 5 | 1 | 7 |
 | Scoring | 0 | 0 | 2 | 0 | 2 |
-| Dependencies | 0 | 1 | 1 | 2 | 4 |
-| **Total** | **8** | **12** | **24** | **8** | **52** |
+| Dependencies / Build | 0 | 2 | 3 | 4 | 9 |
+| **Total** | **8** | **13** | **27** | **12** | **60** |
