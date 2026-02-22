@@ -37,7 +37,7 @@ export const SCRAPER_PORT = envInt('SCRAPER_PORT', 3001);
 // Security
 // ---------------------------------------------------------------------------
 
-export const WEBHOOK_SECRET = envOptional('WEBHOOK_SECRET', '');
+export const WEBHOOK_SECRET = env('WEBHOOK_SECRET');
 
 // ---------------------------------------------------------------------------
 // Reddit OAuth
@@ -109,6 +109,79 @@ export const CRUNCHBASE_API_KEY = envOptional('CRUNCHBASE_API_KEY', '');
 // ---------------------------------------------------------------------------
 
 export const BUILTWITH_API_KEY = envOptional('BUILTWITH_API_KEY', '');
+
+// ---------------------------------------------------------------------------
+// Startup validation — call this on server boot to surface missing config early
+// ---------------------------------------------------------------------------
+
+interface ConfigWarning {
+  level: 'error' | 'warn';
+  message: string;
+}
+
+/**
+ * Validates that all required configuration is present and warns about
+ * optional credentials that limit scraper functionality.
+ * Throws if any critical configuration is missing.
+ */
+export function validateConfig(): void {
+  const warnings: ConfigWarning[] = [];
+
+  // Required config (will throw via env() if missing):
+  // REDIS_URL, SUPABASE_URL, WEBHOOK_SECRET — already enforced at import time.
+
+  // Warn about empty Supabase service role key
+  if (!SUPABASE_SERVICE_ROLE_KEY) {
+    warnings.push({ level: 'error', message: 'SUPABASE_SERVICE_ROLE_KEY is empty — database operations will fail' });
+  }
+
+  // Source-specific API keys — warn if missing
+  const optionalKeys: Array<{ name: string; value: string | undefined; sources: string }> = [
+    { name: 'REDDIT_CLIENT_ID', value: REDDIT_CLIENT_ID, sources: 'reddit' },
+    { name: 'REDDIT_CLIENT_SECRET', value: REDDIT_CLIENT_SECRET, sources: 'reddit' },
+    { name: 'GITHUB_TOKEN', value: GITHUB_TOKEN, sources: 'github' },
+    { name: 'PRODUCTHUNT_API_TOKEN', value: PRODUCTHUNT_API_TOKEN, sources: 'producthunt' },
+    { name: 'SERPAPI_KEY', value: SERPAPI_KEY, sources: 'google_trends, g2, capterra, serpapi_serp' },
+    { name: 'LEGIFRANCE_API_KEY', value: LEGIFRANCE_API_KEY, sources: 'legifrance' },
+    { name: 'SIRENE_API_KEY', value: SIRENE_API_KEY, sources: 'insee' },
+    { name: 'ANTHROPIC_API_KEY', value: ANTHROPIC_API_KEY, sources: 'llm-enrichment' },
+    { name: 'TWITTER_BEARER_TOKEN', value: TWITTER_BEARER_TOKEN, sources: 'twitter' },
+    { name: 'STACKOVERFLOW_API_KEY', value: STACKOVERFLOW_API_KEY, sources: 'stackoverflow' },
+    { name: 'CRUNCHBASE_API_KEY', value: CRUNCHBASE_API_KEY, sources: 'crunchbase' },
+    { name: 'BUILTWITH_API_KEY', value: BUILTWITH_API_KEY, sources: 'builtwith' },
+  ];
+
+  const missing = optionalKeys.filter((k) => !k.value);
+  for (const key of missing) {
+    warnings.push({
+      level: 'warn',
+      message: `${key.name} not set — ${key.sources} scraper(s) will fail`,
+    });
+  }
+
+  // Report warnings
+  const errors = warnings.filter((w) => w.level === 'error');
+  const warns = warnings.filter((w) => w.level === 'warn');
+
+  for (const w of warns) {
+    console.warn(`[config] WARNING: ${w.message}`);
+  }
+
+  if (errors.length > 0) {
+    for (const e of errors) {
+      console.error(`[config] ERROR: ${e.message}`);
+    }
+    throw new Error(
+      `Configuration validation failed with ${errors.length} error(s). Fix the above issues and restart.`
+    );
+  }
+
+  if (missing.length > 0) {
+    console.warn(`[config] ${missing.length} optional API key(s) not configured — some scrapers will be disabled`);
+  } else {
+    console.log('[config] All API keys configured');
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Concurrency limits per source — controls how many BullMQ jobs for each

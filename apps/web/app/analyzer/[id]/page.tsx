@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase';
-import { cn, formatDate, statusColor } from '@/lib/utils';
+import { cn, formatDate, statusColor, sanitizeHtml } from '@/lib/utils';
 
 interface Section {
   id: string;
@@ -364,7 +364,7 @@ export default function AnalysisViewPage() {
                     prose-strong:text-zinc-200 prose-code:text-blue-400
                     prose-li:text-zinc-300 prose-a:text-blue-400
                     prose-pre:bg-zinc-900 prose-pre:border prose-pre:border-zinc-800"
-                  dangerouslySetInnerHTML={{ __html: activeSection.content }}
+                  dangerouslySetInnerHTML={{ __html: sanitizeHtml(activeSection.content) }}
                 />
 
                 {/* Data Sources */}

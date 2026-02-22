@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { SECTION_CONFIGS } from '@repo/shared';
+import { authenticateRequest, isAuthError } from '@/lib/auth';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -9,13 +10,23 @@ const supabase = createClient(
 );
 
 export async function POST(request: NextRequest) {
+  const auth = await authenticateRequest(request);
+  if (isAuthError(auth)) return auth;
+
   try {
     const body = await request.json();
     const { title, ideaDescription, preferences } = body;
 
-    if (!ideaDescription || ideaDescription.length < 10) {
+    if (!ideaDescription || typeof ideaDescription !== 'string') {
       return NextResponse.json(
-        { error: 'Idea description must be at least 10 characters' },
+        { error: 'ideaDescription is required and must be a string' },
+        { status: 400 }
+      );
+    }
+
+    if (ideaDescription.length < 10 || ideaDescription.length > 10_000) {
+      return NextResponse.json(
+        { error: 'Idea description must be between 10 and 10,000 characters' },
         { status: 400 }
       );
     }
@@ -24,7 +35,7 @@ export async function POST(request: NextRequest) {
     const { data: analysis, error: analysisError } = await supabase
       .from('analyses')
       .insert({
-        title: title || ideaDescription.slice(0, 80),
+        title: title ? String(title).slice(0, 200) : ideaDescription.slice(0, 80),
         idea_description: ideaDescription,
         preferences: preferences || {
           targetMarket: 'FR',
@@ -32,6 +43,7 @@ export async function POST(request: NextRequest) {
           budgetConstraint: 'bootstrap',
         },
         status: 'draft',
+        user_id: auth.userId,
       })
       .select()
       .single();

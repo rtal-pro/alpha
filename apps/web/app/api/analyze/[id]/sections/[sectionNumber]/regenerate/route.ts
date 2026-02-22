@@ -8,30 +8,49 @@ const supabase = createClient(
   { auth: { autoRefreshToken: false, persistSession: false } }
 );
 
-export async function POST(request: NextRequest) {
+// POST /api/analyze/[id]/sections/[sectionNumber]/regenerate
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string; sectionNumber: string }> },
+) {
   const auth = await authenticateRequest(request);
   if (isAuthError(auth)) return auth;
 
-  try {
-    const body = await request.json();
-    const { analysisId, sectionNumber, feedback } = body;
+  const { id: analysisId, sectionNumber: sectionNumberStr } = await params;
+  const sectionNumber = parseInt(sectionNumberStr, 10);
 
-    if (!analysisId || !sectionNumber) {
+  if (isNaN(sectionNumber) || sectionNumber < 1 || sectionNumber > 18) {
+    return NextResponse.json(
+      { error: 'Invalid section number. Must be between 1 and 18.' },
+      { status: 400 }
+    );
+  }
+
+  try {
+    // Verify ownership
+    const { data: analysis, error: analysisError } = await supabase
+      .from('analyses')
+      .select('id')
+      .eq('id', analysisId)
+      .eq('user_id', auth.userId)
+      .single();
+
+    if (analysisError || !analysis) {
       return NextResponse.json(
-        { error: 'analysisId and sectionNumber are required' },
-        { status: 400 }
+        { error: 'Analysis not found' },
+        { status: 404 }
       );
     }
 
     // Check section exists and is not locked
-    const { data: section, error } = await supabase
+    const { data: section, error: sectionError } = await supabase
       .from('analysis_sections')
       .select('*')
       .eq('analysis_id', analysisId)
       .eq('section_number', sectionNumber)
       .single();
 
-    if (error || !section) {
+    if (sectionError || !section) {
       return NextResponse.json(
         { error: 'Section not found' },
         { status: 404 }
@@ -45,6 +64,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Parse optional feedback from request body
+    let feedback: string | null = null;
+    try {
+      const body = await request.json();
+      feedback = body.feedback ?? null;
+    } catch {
+      // No body is fine
+    }
+
     // Mark as re-generating
     await supabase
       .from('analysis_sections')
@@ -56,7 +84,6 @@ export async function POST(request: NextRequest) {
       })
       .eq('id', section.id);
 
-    // TODO: Trigger LLM re-generation with feedback context
     return NextResponse.json({
       analysisId,
       sectionNumber,

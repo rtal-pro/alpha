@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { authenticateRequest, isAuthError } from '@/lib/auth';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -8,9 +9,12 @@ const supabase = createClient(
 
 // GET /api/finder/[id] — get opportunity detail with related data
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const auth = await authenticateRequest(request);
+  if (isAuthError(auth)) return auth;
+
   const { id } = await params;
 
   // Fetch opportunity

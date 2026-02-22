@@ -3,7 +3,7 @@
 // ---------------------------------------------------------------------------
 
 import Fastify from 'fastify';
-import { SCRAPER_PORT, WEBHOOK_SECRET } from './config.js';
+import { SCRAPER_PORT, WEBHOOK_SECRET, validateConfig } from './config.js';
 import { scrapeQueue, type ScrapeJobData } from './queue.js';
 import { HealthChecker } from './health/checker.js';
 import { RedditScraper } from './scrapers/reddit.js';
@@ -42,9 +42,9 @@ interface WebhookScrapeBody {
 }
 
 server.post<{ Body: WebhookScrapeBody }>('/webhook/scrape', async (request, reply) => {
-  // Validate webhook secret
+  // Validate webhook secret (always required)
   const secret = request.headers['x-webhook-secret'] as string | undefined;
-  if (WEBHOOK_SECRET && secret !== WEBHOOK_SECRET) {
+  if (secret !== WEBHOOK_SECRET) {
     return reply.status(401).send({ error: 'Invalid webhook secret' });
   }
 
@@ -268,6 +268,9 @@ server.post<{ Body: FeedbackEvent }>('/feedback', async (request, reply) => {
 
 async function start(): Promise<void> {
   try {
+    // Validate configuration before starting
+    validateConfig();
+
     await server.listen({ port: SCRAPER_PORT, host: '0.0.0.0' });
     server.log.info(`Scraper service listening on port ${SCRAPER_PORT}`);
   } catch (err) {
