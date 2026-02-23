@@ -79,7 +79,7 @@ export class WellfoundScraper extends BaseScraper {
   private async fetchAndParseStartups(url: string): Promise<RawScrapedItem[]> {
     const response = await fetch(url, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; SaaSIdeaEngine/0.1)',
+        'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         Accept: 'text/html',
       },
     });
@@ -167,7 +167,7 @@ export class WellfoundScraper extends BaseScraper {
   private async fetchAndParseJobs(url: string): Promise<RawScrapedItem[]> {
     const response = await fetch(url, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; SaaSIdeaEngine/0.1)',
+        'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         Accept: 'text/html',
       },
     });

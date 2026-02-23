@@ -43,7 +43,8 @@ export class SaaSHubScraper extends BaseScraper {
 
   private async scrapeTrending(params: ScrapeParams): Promise<RawScrapedItem[]> {
     const limit = params.limit ?? 30;
-    const url = `${BASE_URL}/trending`;
+    // SaaSHub removed /trending — use /best-crm-software as a category page
+    const url = `${BASE_URL}/best-crm-software`;
     const items = await this.retryWithBackoff(() => this.fetchAndParse(url, 'trending'));
     await this.rateLimitDelay(RATE_LIMIT_DELAY_MS);
     return items.slice(0, limit);
@@ -58,7 +59,7 @@ export class SaaSHubScraper extends BaseScraper {
     if (!category) throw new Error('SaaSHubScraper: category is required');
 
     const slug = category.toLowerCase().replace(/\s+/g, '-');
-    const url = `${BASE_URL}/c/${slug}`;
+    const url = `${BASE_URL}/best-${slug}-software`;
     const items = await this.retryWithBackoff(() => this.fetchAndParse(url, 'category'));
     await this.rateLimitDelay(RATE_LIMIT_DELAY_MS);
     return items.slice(0, params.limit ?? 20);
@@ -86,8 +87,8 @@ export class SaaSHubScraper extends BaseScraper {
   private async fetchAndParse(url: string, context: string): Promise<RawScrapedItem[]> {
     const response = await fetch(url, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; SaaSIdeaEngine/0.1)',
-        Accept: 'text/html',
+        'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        Accept: 'text/html,application/xhtml+xml',
       },
     });
 
@@ -103,46 +104,57 @@ export class SaaSHubScraper extends BaseScraper {
     const items: RawScrapedItem[] = [];
     const now = new Date();
 
-    // SaaSHub uses service cards with structured data
-    const cardRegex = /<div[^>]*class="[^"]*(?:service-card|saas-card|tool-card)[^"]*"[^>]*>([\s\S]*?)<\/div>\s*<\/div>/gi;
-    const nameRegex = /<a[^>]*href="\/([^"]*)"[^>]*class="[^"]*name[^"]*"[^>]*>([^<]*)<\/a>/i;
-    const nameRegex2 = /<h[23][^>]*>\s*<a[^>]*href="\/([^"]*)"[^>]*>([^<]*)<\/a>/i;
-    const descRegex = /<p[^>]*class="[^"]*(?:desc|tagline)[^"]*"[^>]*>([\s\S]*?)<\/p>/i;
-    const scoreRegex = /(?:score|rating)[:\s]*([\d.]+)/i;
-    const categoryRegex = /<a[^>]*class="[^"]*category[^"]*"[^>]*>([^<]*)<\/a>/gi;
-    const upvoteRegex = /(\d+)\s*(?:upvotes?|likes?|recommendations?)/i;
+    // SaaSHub 2024+ uses <li class="... services-list__item ..."> with schema.org markup
+    // Name:   <span itemprop="name">Product</span>
+    // Link:   <a href="/product-alternatives" itemprop="url">
+    // Rating: <div class="rating">123</div>
+    // Desc:   <p class="tagline" itemprop="description">...</p>
+    const cardRegex = /<li[^>]*class="[^"]*services-list__item[^"]*"[^>]*>([\s\S]*?)<\/li>/gi;
+    const nameRegex = /<span\s+itemprop="name">([^<]+)<\/span>/i;
+    const linkRegex = /<a[^>]*href="\/([^"]*-alternatives)"[^>]*itemprop="url"/i;
+    const linkRegex2 = /<a[^>]*href="\/([a-z0-9-]+)"[^>]*itemprop="url"/i;
+    const ratingRegex = /<div[^>]*class="rating"[^>]*>(\d+)<\/div>/i;
+    const descRegex = /<p[^>]*class="tagline"[^>]*(?:itemprop="description")?[^>]*>([^<]*)<\/p>/i;
+    const priceRegex = /<span[^>]*class="tag is-price[^"]*"[^>]*>([^<]*)<\/span>/i;
+    const featuresRegex = /<p[^>]*class="features-list"[^>]*>([\s\S]*?)<\/p>/i;
+    const featureItemRegex = /<span>([^<]*)<\/span>/gi;
 
     let match;
     while ((match = cardRegex.exec(html)) !== null) {
       const card = match[1]!;
-      const nameMatch = nameRegex.exec(card) ?? nameRegex2.exec(card);
+      const nameMatch = nameRegex.exec(card);
       if (!nameMatch) continue;
 
-      const slug = nameMatch[1]?.replace(/\/$/, '') ?? '';
-      const name = nameMatch[2]?.trim() ?? '';
+      const name = nameMatch[1]?.trim() ?? '';
+      const linkMatch = linkRegex.exec(card) ?? linkRegex2.exec(card);
+      const slug = linkMatch?.[1]?.replace(/-alternatives$/, '') ?? name.toLowerCase().replace(/\s+/g, '-');
+      const ratingMatch = ratingRegex.exec(card);
+      const score = ratingMatch ? parseInt(ratingMatch[1]!, 10) : 0;
       const descMatch = descRegex.exec(card);
-      const description = descMatch?.[1]?.replace(/<[^>]+>/g, '').trim() ?? '';
-      const scoreMatch = scoreRegex.exec(card);
-      const score = scoreMatch ? parseFloat(scoreMatch[1]!) : 0;
-      const upvoteMatch = upvoteRegex.exec(card);
-      const upvotes = upvoteMatch ? parseInt(upvoteMatch[1]!, 10) : 0;
+      const description = descMatch?.[1]?.trim() ?? '';
+      const priceMatch = priceRegex.exec(card);
+      const pricing = priceMatch?.[1]?.trim() ?? '';
 
-      const categories: string[] = [];
-      let catMatch;
-      while ((catMatch = categoryRegex.exec(card)) !== null) {
-        categories.push(catMatch[1]!.trim());
+      const features: string[] = [];
+      const featuresBlock = featuresRegex.exec(card);
+      if (featuresBlock) {
+        let fMatch;
+        while ((fMatch = featureItemRegex.exec(featuresBlock[1]!)) !== null) {
+          features.push(fMatch[1]!.trim());
+        }
       }
 
       items.push({
         source: 'saashub',
         entityId: `saashub:${slug}`,
-        url: `${BASE_URL}/${slug}`,
+        url: `${BASE_URL}/${linkMatch?.[1] ?? slug}`,
         payload: {
           name,
           description,
           score,
-          upvotes,
-          categories,
+          upvotes: score,
+          categories: features.slice(0, 3),
+          pricing,
           context,
         },
         format: 'saashub_tool_v1',

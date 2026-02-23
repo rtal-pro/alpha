@@ -19,12 +19,13 @@ import {
   type SignalType,
   type ScrapeSource,
 } from './base.js';
+import { resolveCategory } from '../utils/category-mapper.js';
 
 // ---------------------------------------------------------------------------
 // Config
 // ---------------------------------------------------------------------------
 
-const MIN_EXIT_CLUSTER = 2;        // Need at least 2 exits in a category
+const MIN_EXIT_CLUSTER = 1;        // Need at least 1 exit in a category
 const WINDOW_DAYS = 60;            // Within 60 days
 const MIN_ALTERNATIVE_SEEKS = 3;   // AlternativeTo minimum mentions
 
@@ -137,10 +138,8 @@ export class SaaSExitDetector extends BaseSignalDetector {
     const grouped: Record<string, NormalizedItem[]> = {};
 
     for (const item of items) {
-      // Use first non-meta category, or 'general_saas' as default
-      const category = item.categories.find((c) =>
-        !c.startsWith('market_exit') && !c.startsWith('alt:') && !c.startsWith('betalist:'),
-      ) ?? 'general_saas';
+      const text = `${item.title} ${item.description ?? ''}`;
+      const category = resolveCategory(item.categories, text);
 
       if (!grouped[category]) grouped[category] = [];
       grouped[category]!.push(item);

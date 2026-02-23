@@ -15,27 +15,14 @@ import {
   type SignalType,
   type ScrapeSource,
 } from './base.js';
+import { resolveCategory } from '../utils/category-mapper.js';
 
 // ---------------------------------------------------------------------------
 // Config
 // ---------------------------------------------------------------------------
 
-const MIN_JOB_POSTINGS = 5;
+const MIN_JOB_POSTINGS = 2;
 const WINDOW_DAYS = 30;
-
-// Category keywords for grouping job postings
-const CATEGORY_KEYWORDS: Record<string, RegExp[]> = {
-  fintech: [/\bfintech|payment|banking|lending|neobank|insurtech\b/i],
-  compliance_legal: [/\bcompliance|gdpr|rgpd|privacy|legal.?tech|regtech|audit\b/i],
-  devtools: [/\bdevtools|developer.?tool|api|sdk|infrastructure|platform.?engineer\b/i],
-  cybersecurity: [/\bcyber|security|soc|pentest|threat|vulnerability\b/i],
-  ai_ml: [/\bai|machine learning|ml engineer|llm|nlp|data scientist\b/i],
-  data_analytics: [/\bdata.?engineer|analytics|bi|business intelligence|data.?platform\b/i],
-  ecommerce: [/\becommerce|e-commerce|marketplace|shopify|magento\b/i],
-  healthcare: [/\bhealth.?tech|medical|telemedicine|clinical|pharma\b/i],
-  marketing: [/\bmarketing.?tech|martech|growth|seo|content.?market\b/i],
-  general_saas: [/\bsaas|b2b|product.?manag|customer.?success\b/i],
-};
 
 // Seniority signals that indicate growth stage
 const GROWTH_INDICATORS: Array<{ pattern: RegExp; weight: number }> = [
@@ -54,10 +41,10 @@ const GROWTH_INDICATORS: Array<{ pattern: RegExp; weight: number }> = [
 export class TalentDemandDetector extends BaseSignalDetector {
   readonly name = 'TalentDemandDetector';
   readonly signalTypes: SignalType[] = ['market_entry'];
-  readonly supportedSources: ScrapeSource[] = ['job_boards'];
+  readonly supportedSources: ScrapeSource[] = ['job_boards', 'upwork', 'malt'];
 
   async detect(items: NormalizedItem[]): Promise<DetectedSignal[]> {
-    const relevant = items.filter((i) => i.source === 'job_boards');
+    const relevant = items.filter((i) => ['job_boards', 'upwork', 'malt'].includes(i.source));
     if (relevant.length === 0) return [];
 
     const windowEnd = new Date();
@@ -69,7 +56,8 @@ export class TalentDemandDetector extends BaseSignalDetector {
     // Group by inferred category
     const byCategory = new Map<string, NormalizedItem[]>();
     for (const item of recent) {
-      const category = this.inferCategory(item);
+      const text = `${item.title} ${item.description ?? ''}`;
+      const category = resolveCategory(item.categories, text);
       const group = byCategory.get(category) ?? [];
       group.push(item);
       byCategory.set(category, group);
@@ -83,7 +71,12 @@ export class TalentDemandDetector extends BaseSignalDetector {
       // Compute growth signal from job quality
       const growthScore = this.computeGrowthScore(jobs);
       const uniqueCompanies = new Set(
-        jobs.map((j) => (j.metadata?.['company'] as string) ?? j.title),
+        jobs.map((j) =>
+          (j.metadata?.['company'] as string)
+          ?? (j.metadata?.['searchQuery'] as string)
+          ?? (j.metadata?.['profileSlug'] as string)
+          ?? j.title,
+        ),
       ).size;
 
       // Strength based on volume, company diversity, and growth indicators
@@ -121,8 +114,9 @@ export class TalentDemandDetector extends BaseSignalDetector {
           geos,
           sample_jobs: jobs.slice(0, 8).map((j) => ({
             title: j.title,
-            company: j.metadata?.['company'],
+            company: (j.metadata?.['company'] as string) ?? (j.metadata?.['searchQuery'] as string) ?? (j.metadata?.['profileSlug'] as string),
             location: j.metadata?.['location'],
+            source: j.source,
             url: j.url,
           })),
           top_companies: this.getTopCompanies(jobs, 5),
@@ -136,22 +130,6 @@ export class TalentDemandDetector extends BaseSignalDetector {
   // -----------------------------------------------------------------------
   // Helpers
   // -----------------------------------------------------------------------
-
-  private inferCategory(item: NormalizedItem): string {
-    const text = `${item.title} ${item.description ?? ''}`;
-
-    for (const [category, patterns] of Object.entries(CATEGORY_KEYWORDS)) {
-      for (const pattern of patterns) {
-        if (pattern.test(text)) return category;
-      }
-    }
-
-    // Check metadata categories
-    const metaCategories = (item.metadata?.['categories'] as string[]) ?? [];
-    if (metaCategories.length > 0) return metaCategories[0]!;
-
-    return 'general_saas';
-  }
 
   private computeGrowthScore(jobs: NormalizedItem[]): number {
     let totalWeight = 0;
@@ -178,6 +156,15 @@ export class TalentDemandDetector extends BaseSignalDetector {
     const geos = new Set<string>();
 
     for (const job of jobs) {
+      // Check categories for geo: tags
+      for (const cat of job.categories) {
+        const geoMatch = /^geo:([A-Z]{2})$/i.exec(cat);
+        if (geoMatch) geos.add(geoMatch[1]!.toUpperCase());
+      }
+
+      // Source-based geo
+      if (job.source === 'malt') geos.add('FR');
+
       const location = ((job.metadata?.['location'] as string) ?? '').toLowerCase();
 
       if (/\bfrance|paris|lyon|marseille|toulouse|nantes|bordeaux\b/.test(location)) geos.add('FR');

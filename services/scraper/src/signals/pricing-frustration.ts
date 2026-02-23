@@ -13,12 +13,13 @@ import {
   type SignalType,
   type ScrapeSource,
 } from './base.js';
+import { resolveCategory } from '../utils/category-mapper.js';
 
 // ---------------------------------------------------------------------------
 // Config
 // ---------------------------------------------------------------------------
 
-const MIN_PRICING_MENTIONS = 3;
+const MIN_PRICING_MENTIONS = 1;
 const WINDOW_DAYS = 30;
 
 // Pricing-specific patterns with severity weights
@@ -54,7 +55,7 @@ export class PricingFrustrationDetector extends BaseSignalDetector {
   readonly name = 'PricingFrustrationDetector';
   readonly signalTypes: SignalType[] = ['pricing_change'];
   readonly supportedSources: ScrapeSource[] = [
-    'reddit', 'hacker_news', 'indiehackers', 'twitter', 'stackoverflow',
+    'reddit', 'hacker_news', 'indiehackers', 'twitter', 'stackoverflow', 'trustpilot',
   ];
 
   async detect(items: NormalizedItem[]): Promise<DetectedSignal[]> {
@@ -116,7 +117,9 @@ export class PricingFrustrationDetector extends BaseSignalDetector {
 
       // Collect all labels
       const labels = new Set(items.flatMap((i) => i.labels));
-      const category = items[0]!.item.categories[0]?.replace('r/', '') ?? 'general_saas';
+      const allCategories = items.flatMap((i) => i.item.categories);
+      const text = items.map((i) => `${i.item.title} ${i.item.description ?? ''}`).join(' ');
+      const category = resolveCategory(allCategories, text);
 
       signals.push({
         signal_type: 'pricing_change',
@@ -153,7 +156,8 @@ export class PricingFrustrationDetector extends BaseSignalDetector {
       // Group by category
       const byCategory = new Map<string, typeof noProduct>();
       for (const pi of noProduct) {
-        const cat = pi.item.categories[0]?.replace('r/', '') ?? 'general_saas';
+        const txt = `${pi.item.title} ${pi.item.description ?? ''}`;
+        const cat = resolveCategory(pi.item.categories, txt);
         const group = byCategory.get(cat) ?? [];
         group.push(pi);
         byCategory.set(cat, group);
@@ -204,6 +208,11 @@ export class PricingFrustrationDetector extends BaseSignalDetector {
     labels: string[];
     mentionedProduct: string | null;
   } {
+    // Trustpilot provides business-page summaries, not review text
+    if (item.source === 'trustpilot') {
+      return this.analyzeTrustpilotPricing(item);
+    }
+
     const text = `${item.title} ${item.description ?? ''}`;
     let score = 0;
     const labels: string[] = [];
@@ -221,6 +230,46 @@ export class PricingFrustrationDetector extends BaseSignalDetector {
     if (productMatch?.[2]) {
       mentionedProduct = productMatch[2].trim();
     }
+
+    return { score: Math.min(score, 8), labels, mentionedProduct };
+  }
+
+  private analyzeTrustpilotPricing(item: NormalizedItem): {
+    score: number;
+    labels: string[];
+    mentionedProduct: string | null;
+  } {
+    let score = 0;
+    const labels: string[] = [];
+
+    const rating = item.metrics['rating'] ?? 5;
+    const isLowRated = item.metadata?.['isLowRated'] as boolean | undefined;
+    const hasDeclining = item.metadata?.['hasDecliningSignal'] as boolean | undefined;
+    const searchContext = (item.metadata?.['searchContext'] as string) ?? '';
+
+    // Low rating as frustration proxy
+    if (rating <= 2.0 || isLowRated) {
+      score += 3;
+      labels.push('price_complaint');
+    } else if (rating <= 3.0) {
+      score += 2;
+      labels.push('value_mismatch');
+    }
+
+    // Declining satisfaction
+    if (hasDeclining) {
+      score += 2;
+      labels.push('price_increase');
+    }
+
+    // Check if the search context was pricing-related
+    if (/pric|cost|expensive|cheap|afford|billing/i.test(searchContext)) {
+      score += 1;
+      labels.push('seeking_alternative');
+    }
+
+    // The product is the item title itself (Trustpilot business name)
+    const mentionedProduct = item.title || null;
 
     return { score: Math.min(score, 8), labels, mentionedProduct };
   }

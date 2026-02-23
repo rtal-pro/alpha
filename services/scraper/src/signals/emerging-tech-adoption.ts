@@ -18,7 +18,7 @@ import {
 // Config
 // ---------------------------------------------------------------------------
 
-const MIN_MENTIONS = 5;
+const MIN_MENTIONS = 2;
 const WINDOW_DAYS = 30;
 
 // Tech stacks and emerging technologies to track

@@ -44,7 +44,7 @@ export class AppSumoScraper extends BaseScraper {
 
   private async scrapeDeals(params: ScrapeParams): Promise<RawScrapedItem[]> {
     const limit = params.limit ?? 30;
-    const url = `${BASE_URL}/products/`;
+    const url = `${BASE_URL}/browse/`;
     const items = await this.retryWithBackoff(() => this.fetchAndParse(url));
     await this.rateLimitDelay(RATE_LIMIT_DELAY_MS);
     return items.slice(0, limit);
@@ -71,7 +71,7 @@ export class AppSumoScraper extends BaseScraper {
 
   private async scrapeBestSellers(params: ScrapeParams): Promise<RawScrapedItem[]> {
     const limit = params.limit ?? 20;
-    const url = `${BASE_URL}/best-sellers/`;
+    const url = `${BASE_URL}/browse/?sort=best-sellers`;
     const items = await this.retryWithBackoff(() => this.fetchAndParse(url));
     await this.rateLimitDelay(RATE_LIMIT_DELAY_MS);
     return items.slice(0, limit);
@@ -84,8 +84,8 @@ export class AppSumoScraper extends BaseScraper {
   private async fetchAndParse(url: string): Promise<RawScrapedItem[]> {
     const response = await fetch(url, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; SaaSIdeaEngine/0.1)',
-        Accept: 'text/html',
+        'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        Accept: 'text/html,application/xhtml+xml',
       },
     });
 
@@ -167,22 +167,34 @@ export class AppSumoScraper extends BaseScraper {
         try {
           const nextData = JSON.parse(nextMatch[1]!) as Record<string, unknown>;
           const pageProps = (nextData['props'] as Record<string, unknown>)?.['pageProps'] as Record<string, unknown>;
-          const products = (pageProps?.['products'] ?? pageProps?.['deals'] ?? []) as Array<Record<string, unknown>>;
+
+          // AppSumo /browse/ uses fallbackData[0].deals[]
+          let products: Array<Record<string, unknown>> = [];
+          const fallbackData = pageProps?.['fallbackData'] as Array<Record<string, unknown>> | undefined;
+          if (Array.isArray(fallbackData) && fallbackData.length > 0) {
+            products = (fallbackData[0]?.['deals'] ?? []) as Array<Record<string, unknown>>;
+          }
+          // Also try direct pageProps.products or pageProps.deals
+          if (products.length === 0) {
+            products = (pageProps?.['products'] ?? pageProps?.['deals'] ?? []) as Array<Record<string, unknown>>;
+          }
 
           for (const product of products) {
+            const slug = product['slug'] ?? product['id'] ?? '';
+            const absUrl = product['get_absolute_url'] as string | undefined;
             items.push({
               source: 'appsumo',
-              entityId: `appsumo:${product['slug'] ?? product['id']}`,
-              url: `${BASE_URL}/products/${product['slug'] ?? product['id']}/`,
+              entityId: `appsumo:${slug}`,
+              url: absUrl ? `${BASE_URL}${absUrl}` : `${BASE_URL}/products/${slug}/`,
               payload: {
-                name: product['name'] ?? product['title'],
-                description: product['tagline'] ?? product['short_description'],
+                name: product['public_name'] ?? product['name'] ?? product['title'],
+                description: product['card_description'] ?? product['tagline'] ?? product['short_description'],
                 deal_price: product['price'] ?? product['deal_price'] ?? 0,
                 original_price: product['original_price'] ?? product['retail_price'] ?? 0,
                 rating: product['rating'] ?? product['average_rating'] ?? 0,
                 review_count: product['review_count'] ?? product['reviews_count'] ?? 0,
-                categories: product['categories'] ?? [],
-                deal_type: 'lifetime',
+                categories: product['product_tags'] ?? product['categories'] ?? [],
+                deal_type: product['browse_deal_status'] ?? 'lifetime',
               },
               format: 'appsumo_deal_v1',
               scrapedAt: now,

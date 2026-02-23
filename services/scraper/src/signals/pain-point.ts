@@ -12,13 +12,14 @@ import {
   type SignalType,
   type ScrapeSource,
 } from './base.js';
+import { resolveCategory } from '../utils/category-mapper.js';
 
 // ---------------------------------------------------------------------------
 // Config
 // ---------------------------------------------------------------------------
 
-const MIN_PAIN_MENTIONS = 5;
-const PAIN_WINDOW_DAYS = 14;
+const MIN_PAIN_MENTIONS = 2;
+const PAIN_WINDOW_DAYS = 30;
 
 // Common pain patterns to look for in post text
 const PAIN_INDICATORS = [
@@ -108,7 +109,9 @@ export class PainPointClusterDetector extends BaseSignalDetector {
       if (strength < 15) continue;
 
       // Infer category from first post
-      const category = posts[0]!.item.categories[0]?.replace('r/', '') ?? 'general_saas';
+      const allCategories = posts.flatMap((p) => p.item.categories);
+      const text = posts.map((p) => `${p.item.title} ${p.item.description ?? ''}`).join(' ');
+      const category = resolveCategory(allCategories, text);
 
       const topPosts = posts
         .sort((a, b) => b.painScore - a.painScore)

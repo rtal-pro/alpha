@@ -13,13 +13,14 @@ import {
   type SignalType,
   type ScrapeSource,
 } from './base.js';
+import { resolveCategory } from '../utils/category-mapper.js';
 
 // ---------------------------------------------------------------------------
 // Config
 // ---------------------------------------------------------------------------
 
-const MIN_STARS = 500;
-const MIN_RECENT_STARS = 50; // Stars gained in scrape window
+const MIN_STARS = 200;
+const MIN_RECENT_STARS = 20; // Stars gained in scrape window
 const WINDOW_DAYS = 30;
 
 // Indicators that users want a hosted version
@@ -90,7 +91,8 @@ export class OSSCommercialGapDetector extends BaseSignalDetector {
 
       if (strength < 20) continue;
 
-      const category = this.inferCategory(repo);
+      const text = `${repo.title} ${repo.description ?? ''}`;
+      const category = resolveCategory(repo.categories, text);
 
       signals.push({
         signal_type: 'oss_traction',
@@ -157,20 +159,4 @@ export class OSSCommercialGapDetector extends BaseSignalDetector {
     return Math.min(100, score);
   }
 
-  private inferCategory(repo: NormalizedItem): string {
-    const text = `${repo.title} ${repo.description ?? ''}`.toLowerCase();
-    const categories = repo.categories.map((c) => c.toLowerCase());
-
-    if (categories.some((c) => /database|db|sql|nosql|redis|postgres/.test(c)) || /database|db|store/.test(text)) {
-      return 'databases';
-    }
-    if (/monitor|observ|metric|trace|log/.test(text)) return 'monitoring';
-    if (/ci|cd|deploy|pipeline|build/.test(text)) return 'ci_cd';
-    if (/api|gateway|proxy|mesh/.test(text)) return 'api_tools';
-    if (/test|qa|selenium|playwright/.test(text)) return 'testing';
-    if (/auth|identity|oauth|sso/.test(text)) return 'authentication';
-    if (/queue|message|event|stream|kafka/.test(text)) return 'infrastructure';
-    if (/analytic|dashboard|bi|report/.test(text)) return 'analytics';
-    return 'devtools';
-  }
 }

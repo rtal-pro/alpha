@@ -13,12 +13,13 @@ import {
   type SignalType,
   type ScrapeSource,
 } from './base.js';
+import { resolveCategory } from '../utils/category-mapper.js';
 
 // ---------------------------------------------------------------------------
 // Config
 // ---------------------------------------------------------------------------
 
-const MIN_FUNDING_ROUNDS = 3;
+const MIN_FUNDING_ROUNDS = 1;
 const WINDOW_DAYS = 60;
 
 // Stage weights — later stages = stronger market validation
@@ -33,21 +34,6 @@ const STAGE_WEIGHTS: Record<string, number> = {
   ipo: 3.0,
 };
 
-// Category inference from company descriptions
-const CATEGORY_KEYWORDS: Record<string, RegExp> = {
-  fintech: /\b(fintech|payment|banking|lending|neobank|insurtech|defi|crypto)\b/i,
-  cybersecurity: /\b(cyber|security|soc|threat|vulnerability|zero.?trust|siem)\b/i,
-  ai_ml: /\b(ai|artificial intelligence|machine learning|llm|generative|gpt|deep learning)\b/i,
-  devtools: /\b(developer|devtools|api|sdk|infrastructure|cloud|platform)\b/i,
-  healthcare: /\b(health|medical|clinical|pharma|biotech|telemedicine|digital health)\b/i,
-  ecommerce: /\b(ecommerce|e-commerce|marketplace|retail|d2c|shopify)\b/i,
-  compliance_legal: /\b(compliance|legal|regtech|gdpr|privacy|audit|risk)\b/i,
-  hr_tech: /\b(hr|human resource|talent|recruit|payroll|workforce)\b/i,
-  edtech: /\b(education|edtech|learning|training|lms|e-learning)\b/i,
-  marketing: /\b(marketing|martech|advertising|seo|content|growth)\b/i,
-  analytics: /\b(analytics|data|bi|business intelligence|dashboard|reporting)\b/i,
-  automation: /\b(automation|workflow|rpa|no-code|low-code|integration)\b/i,
-};
 
 // ---------------------------------------------------------------------------
 // FundingSurgeDetector
@@ -56,7 +42,7 @@ const CATEGORY_KEYWORDS: Record<string, RegExp> = {
 export class FundingSurgeDetector extends BaseSignalDetector {
   readonly name = 'FundingSurgeDetector';
   readonly signalTypes: SignalType[] = ['funding_surge'];
-  readonly supportedSources: ScrapeSource[] = ['crunchbase', 'producthunt', 'hacker_news'];
+  readonly supportedSources: ScrapeSource[] = ['crunchbase', 'producthunt', 'hacker_news', 'ycombinator', 'betalist', 'starter_story'];
 
   async detect(items: NormalizedItem[]): Promise<DetectedSignal[]> {
     const relevant = items.filter((i) =>
@@ -76,7 +62,8 @@ export class FundingSurgeDetector extends BaseSignalDetector {
     // Group by inferred category
     const byCategory = new Map<string, NormalizedItem[]>();
     for (const item of fundingItems) {
-      const category = this.inferCategory(item);
+      const text = `${item.title} ${item.description ?? ''}`;
+      const category = resolveCategory(item.categories, text);
       const group = byCategory.get(category) ?? [];
       group.push(item);
       byCategory.set(category, group);
@@ -88,11 +75,13 @@ export class FundingSurgeDetector extends BaseSignalDetector {
       if (items.length < MIN_FUNDING_ROUNDS) continue;
 
       const totalRaised = items.reduce(
-        (sum, item) => sum + (item.metrics['amount_usd'] ?? item.metrics['funding_amount'] ?? 0), 0,
+        (sum, item) => sum + (item.metrics['moneyRaisedUsd'] ?? item.metrics['amount_usd'] ?? item.metrics['funding_amount'] ?? 0), 0,
       );
       const avgAmount = totalRaised / items.length;
       const uniqueCompanies = new Set(
-        items.map((i) => (i.metadata?.['company'] as string) ?? i.title),
+        items.map((i) =>
+          (i.metadata?.['organization'] as string) ?? (i.metadata?.['company'] as string) ?? i.title,
+        ),
       ).size;
 
       // Compute stage signal
@@ -136,9 +125,9 @@ export class FundingSurgeDetector extends BaseSignalDetector {
           stage_score: stageScore,
           geos,
           top_rounds: items.slice(0, 8).map((i) => ({
-            company: (i.metadata?.['company'] as string) ?? i.title,
-            amount: i.metrics['amount_usd'] ?? i.metrics['funding_amount'],
-            stage: i.metadata?.['stage'],
+            company: (i.metadata?.['organization'] as string) ?? (i.metadata?.['company'] as string) ?? i.title,
+            amount: i.metrics['moneyRaisedUsd'] ?? i.metrics['amount_usd'] ?? i.metrics['funding_amount'],
+            stage: (i.metadata?.['investmentType'] as string) ?? i.metadata?.['stage'],
             url: i.url,
           })),
         },
@@ -157,26 +146,8 @@ export class FundingSurgeDetector extends BaseSignalDetector {
     return (
       /\b(rais|fund|series\s+[a-e]|seed|round|investment|backed|million|venture)\b/.test(text) ||
       item.categories.some((c) => /funding|investment|venture/.test(c)) ||
-      (item.metrics['amount_usd'] ?? item.metrics['funding_amount'] ?? 0) > 0
+      (item.metrics['moneyRaisedUsd'] ?? item.metrics['amount_usd'] ?? item.metrics['funding_amount'] ?? 0) > 0
     );
-  }
-
-  private inferCategory(item: NormalizedItem): string {
-    const text = `${item.title} ${item.description ?? ''}`;
-
-    for (const [category, pattern] of Object.entries(CATEGORY_KEYWORDS)) {
-      if (pattern.test(text)) return category;
-    }
-
-    // Check item categories
-    for (const cat of item.categories) {
-      const lower = cat.toLowerCase();
-      for (const [category, pattern] of Object.entries(CATEGORY_KEYWORDS)) {
-        if (pattern.test(lower)) return category;
-      }
-    }
-
-    return 'general_saas';
   }
 
   private computeStageScore(items: NormalizedItem[]): number {
@@ -184,7 +155,8 @@ export class FundingSurgeDetector extends BaseSignalDetector {
     let count = 0;
 
     for (const item of items) {
-      const stage = ((item.metadata?.['stage'] as string) ?? '').toLowerCase().replace(/[\s-]/g, '_');
+      const raw = (item.metadata?.['investmentType'] as string) ?? (item.metadata?.['stage'] as string) ?? '';
+      const stage = raw.toLowerCase().replace(/[\s-]/g, '_');
       const weight = STAGE_WEIGHTS[stage] ?? 1.0;
       totalWeight += weight;
       count++;

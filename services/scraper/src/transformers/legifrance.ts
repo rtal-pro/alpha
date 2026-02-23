@@ -139,7 +139,7 @@ export class LegifranceTransformer extends BaseTransformer {
       CONSTITUTION: 'Constitution',
     };
 
-    return natureMap[nature.toUpperCase()] ?? nature || 'Texte';
+    return natureMap[nature.toUpperCase()] ?? (nature || 'Texte');
   }
 
   /**

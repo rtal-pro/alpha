@@ -27,7 +27,7 @@ export async function GET(
     );
   }
 
-  // Fetch related signals
+  // Fetch related signals (include description and evidence)
   const signalIds = opportunity.source_signals ?? [];
   let signals: unknown[] = [];
   if (signalIds.length > 0) {
@@ -37,6 +37,30 @@ export async function GET(
       .in('id', signalIds.slice(0, 50))
       .order('strength', { ascending: false });
     signals = data ?? [];
+  }
+
+  // Fetch raw events linked to signals for evidence drill-down
+  const rawEventIds = (signals as Array<{ raw_event_id?: string }>)
+    .filter((s) => s.raw_event_id)
+    .map((s) => s.raw_event_id!);
+  let rawEvents: unknown[] = [];
+  if (rawEventIds.length > 0) {
+    const { data } = await supabase
+      .from('raw_events')
+      .select('id, source, source_url, source_entity_id, raw_payload, scraped_at')
+      .in('id', rawEventIds.slice(0, 50));
+    rawEvents = data ?? [];
+  }
+
+  // Fetch source products linked to opportunity
+  const productIds = opportunity.source_products ?? [];
+  let products: unknown[] = [];
+  if (productIds.length > 0) {
+    const { data } = await supabase
+      .from('products')
+      .select('id, canonical_name, primary_category, website_url, description, source_ids, tags')
+      .in('id', productIds.slice(0, 20));
+    products = data ?? [];
   }
 
   // Fetch related ideas
@@ -76,6 +100,8 @@ export async function GET(
     signals,
     ideas: ideas ?? [],
     regulations,
+    rawEvents,
+    products,
     feedback: feedback ?? [],
     trajectory,
   });

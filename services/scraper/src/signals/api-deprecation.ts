@@ -13,12 +13,13 @@ import {
   type SignalType,
   type ScrapeSource,
 } from './base.js';
+import { resolveCategory } from '../utils/category-mapper.js';
 
 // ---------------------------------------------------------------------------
 // Config
 // ---------------------------------------------------------------------------
 
-const MIN_MENTIONS = 3;
+const MIN_MENTIONS = 1;
 const WINDOW_DAYS = 30;
 
 // Patterns that indicate API deprecation / sunset
@@ -146,7 +147,8 @@ export class APIDeprecationDetector extends BaseSignalDetector {
     if (noPlatform.length >= MIN_MENTIONS) {
       const byCategory = new Map<string, typeof noPlatform>();
       for (const entry of noPlatform) {
-        const cat = entry.item.categories[0] ?? 'general_saas';
+        const txt = `${entry.item.title} ${entry.item.description ?? ''}`;
+        const cat = resolveCategory(entry.item.categories, txt);
         const group = byCategory.get(cat) ?? [];
         group.push(entry);
         byCategory.set(cat, group);
@@ -215,16 +217,18 @@ export class APIDeprecationDetector extends BaseSignalDetector {
   }
 
   private inferCategory(platform: string, entries: Array<{ item: NormalizedItem }>): string {
+    // Platform-specific overrides
     const p = platform.toLowerCase();
     if (/stripe|payment|fintech/.test(p)) return 'fintech';
     if (/heroku|aws|azure|google cloud|firebase/.test(p)) return 'infrastructure';
-    if (/twitter|x api|discord|slack/.test(p)) return 'social_api';
+    if (/twitter|x api|discord|slack/.test(p)) return 'devtools';
     if (/shopify/.test(p)) return 'ecommerce';
-    if (/twilio|sendgrid/.test(p)) return 'communication';
+    if (/twilio|sendgrid/.test(p)) return 'automation';
     if (/zapier|airtable|notion/.test(p)) return 'automation';
 
-    // Fall back to item categories
+    // Fall back to resolveCategory
     const cats = entries.flatMap((e) => e.item.categories);
-    return cats[0] ?? 'general_saas';
+    const text = entries.map((e) => `${e.item.title} ${e.item.description ?? ''}`).join(' ');
+    return resolveCategory(cats, text);
   }
 }

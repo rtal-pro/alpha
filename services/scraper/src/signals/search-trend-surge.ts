@@ -13,12 +13,13 @@ import {
   type SignalType,
   type ScrapeSource,
 } from './base.js';
+import { resolveCategory } from '../utils/category-mapper.js';
 
 // ---------------------------------------------------------------------------
 // Config
 // ---------------------------------------------------------------------------
 
-const MIN_SUGGESTIONS = 5;
+const MIN_SUGGESTIONS = 3;
 const SURGE_WINDOW_DAYS = 14;
 
 // Intent types that strongly indicate market opportunity
@@ -98,7 +99,8 @@ export class SearchTrendSurgeDetector extends BaseSignalDetector {
       if (strength < 15) continue;
 
       // Infer category from keyword
-      const category = this.inferCategory(keyword);
+      const allCategories = suggestions.flatMap((s) => s.categories);
+      const category = resolveCategory(allCategories, keyword);
 
       signals.push({
         signal_type: 'search_trend',
@@ -133,21 +135,6 @@ export class SearchTrendSurgeDetector extends BaseSignalDetector {
   // -----------------------------------------------------------------------
   // Helpers
   // -----------------------------------------------------------------------
-
-  private inferCategory(keyword: string): string {
-    const k = keyword.toLowerCase();
-    if (/\b(crm|sales|pipeline)\b/.test(k)) return 'crm';
-    if (/\b(invoice|accounting|billing)\b/.test(k)) return 'invoicing';
-    if (/\b(payment|stripe|fintech)\b/.test(k)) return 'fintech';
-    if (/\b(analytics|tracking|dashboard)\b/.test(k)) return 'analytics';
-    if (/\b(ci|cd|deploy|devops|infra)\b/.test(k)) return 'devtools';
-    if (/\b(compliance|gdpr|rgpd|privacy)\b/.test(k)) return 'compliance_legal';
-    if (/\b(marketing|seo|email|campaign)\b/.test(k)) return 'marketing';
-    if (/\b(project|task|kanban|agile)\b/.test(k)) return 'project_management';
-    if (/\b(ecommerce|shop|store|marketplace)\b/.test(k)) return 'ecommerce';
-    if (/\b(ai|ml|llm|gpt|chatbot)\b/.test(k)) return 'ai_ml';
-    return 'general_saas';
-  }
 
   private inferGeo(items: NormalizedItem[]): string[] {
     const geos = new Set<string>();

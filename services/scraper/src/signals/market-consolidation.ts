@@ -16,12 +16,13 @@ import {
   type SignalType,
   type ScrapeSource,
 } from './base.js';
+import { resolveCategory } from '../utils/category-mapper.js';
 
 // ---------------------------------------------------------------------------
 // Config
 // ---------------------------------------------------------------------------
 
-const MIN_MENTIONS = 2;
+const MIN_MENTIONS = 1;
 const WINDOW_DAYS = 45;
 
 // M&A / consolidation patterns
@@ -51,6 +52,7 @@ export class MarketConsolidationDetector extends BaseSignalDetector {
   readonly signalTypes: SignalType[] = ['market_consolidation'];
   readonly supportedSources: ScrapeSource[] = [
     'crunchbase', 'hacker_news', 'reddit', 'twitter', 'producthunt',
+    'ycombinator', 'starter_story', 'indiehackers',
   ];
 
   async detect(items: NormalizedItem[]): Promise<DetectedSignal[]> {
@@ -76,7 +78,8 @@ export class MarketConsolidationDetector extends BaseSignalDetector {
     // Group by category
     const byCategory = new Map<string, typeof scored>();
     for (const entry of scored) {
-      const category = this.inferCategory(entry.item);
+      const text = `${entry.item.title} ${entry.item.description ?? ''}`;
+      const category = resolveCategory(entry.item.categories, text);
       const group = byCategory.get(category) ?? [];
       group.push(entry);
       byCategory.set(category, group);
@@ -176,28 +179,6 @@ export class MarketConsolidationDetector extends BaseSignalDetector {
     }
 
     return { score: Math.min(score, 12), labels };
-  }
-
-  private inferCategory(item: NormalizedItem): string {
-    const text = `${item.title} ${item.description ?? ''}`.toLowerCase();
-    const cats: Record<string, RegExp> = {
-      fintech: /\b(fintech|payment|banking|stripe|plaid)\b/,
-      devtools: /\b(developer|devtools|api|github|gitlab|ci|cd)\b/,
-      cybersecurity: /\b(security|cyber|siem|identity|auth)\b/,
-      analytics: /\b(analytics|data|bi|dashboard)\b/,
-      marketing: /\b(marketing|seo|ads|content|email)\b/,
-      crm: /\b(crm|sales|customer|pipeline)\b/,
-      ecommerce: /\b(ecommerce|shopify|marketplace|retail)\b/,
-      ai_ml: /\b(ai|ml|llm|gpt|chatbot)\b/,
-      hr_tech: /\b(hr|hiring|recruit|payroll|talent)\b/,
-      collaboration: /\b(collaborat|slack|teams|project\s+manage)\b/,
-    };
-
-    for (const [category, pattern] of Object.entries(cats)) {
-      if (pattern.test(text)) return category;
-    }
-
-    return item.categories[0] ?? 'general_saas';
   }
 
   private extractProducts(

@@ -14,11 +14,15 @@
     "dev:web": "turbo dev --filter=web",
     "dev:scraper": "turbo dev --filter=scraper-service",
     "db:migrate": "supabase db push",
-    "db:gen-types": "supabase gen types typescript --local > packages/db/src/database.types.ts"
+    "db:gen-types": "supabase gen types typescript --local > packages/db/src/database.types.ts",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
   },
   "devDependencies": {
+    "@vitest/coverage-v8": "^4.0.18",
     "turbo": "^2.3.0",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "vitest": "^4.0.18"
   },
   "packageManager": "npm@10.8.0",
   "engines": {

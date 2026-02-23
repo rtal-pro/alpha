@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { createClient } from '@/lib/supabase';
 
 // ---------------------------------------------------------------------------
@@ -54,8 +54,41 @@ const sourceBadgeColors: Record<string, string> = {
   github: 'bg-purple-500/20 text-purple-300 border-purple-500/30',
   hacker_news: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
   google_trends: 'bg-blue-500/20 text-blue-300 border-blue-500/30',
+  google_autocomplete: 'bg-blue-500/20 text-blue-300 border-blue-500/30',
   eurlex: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',
   legifrance: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30',
+  insee: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30',
+  twitter: 'bg-sky-500/20 text-sky-300 border-sky-500/30',
+  stackoverflow: 'bg-orange-500/20 text-orange-300 border-orange-500/30',
+  indiehackers: 'bg-blue-500/20 text-blue-300 border-blue-500/30',
+  serpapi_g2: 'bg-red-500/20 text-red-300 border-red-500/30',
+  serpapi_capterra: 'bg-teal-500/20 text-teal-300 border-teal-500/30',
+  trustpilot: 'bg-green-500/20 text-green-300 border-green-500/30',
+  shopify_apps: 'bg-green-500/20 text-green-300 border-green-500/30',
+  chrome_webstore: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30',
+  zapier: 'bg-orange-500/20 text-orange-300 border-orange-500/30',
+  crunchbase: 'bg-blue-500/20 text-blue-300 border-blue-500/30',
+  similarweb: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30',
+  builtwith: 'bg-green-500/20 text-green-300 border-green-500/30',
+  data_gouv: 'bg-blue-500/20 text-blue-300 border-blue-500/30',
+  eu_ted: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',
+  boamp: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',
+  job_boards: 'bg-violet-500/20 text-violet-300 border-violet-500/30',
+  upwork: 'bg-green-500/20 text-green-300 border-green-500/30',
+  malt: 'bg-pink-500/20 text-pink-300 border-pink-500/30',
+  pricing_tracker: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
+  betalist: 'bg-red-500/20 text-red-300 border-red-500/30',
+  alternativeto: 'bg-green-500/20 text-green-300 border-green-500/30',
+  acquire: 'bg-blue-500/20 text-blue-300 border-blue-500/30',
+  wellfound: 'bg-rose-500/20 text-rose-300 border-rose-500/30',
+  dealroom: 'bg-purple-500/20 text-purple-300 border-purple-500/30',
+  open_startups: 'bg-teal-500/20 text-teal-300 border-teal-500/30',
+  saashub: 'bg-blue-500/20 text-blue-300 border-blue-500/30',
+  starter_story: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30',
+  appsumo: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
+  ycombinator: 'bg-orange-500/20 text-orange-300 border-orange-500/30',
+  pappers: 'bg-blue-500/20 text-blue-300 border-blue-500/30',
+  serpapi_serp: 'bg-green-500/20 text-green-300 border-green-500/30',
 };
 
 function SourceBadge({ source }: { source: string }) {
@@ -87,7 +120,7 @@ export default function RawDataPage() {
   const [sourceFilter, setSourceFilter] = useState<string>('all');
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
 
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -185,12 +218,45 @@ export default function RawDataPage() {
           >
             <option value="all">All Sources</option>
             <option value="reddit">Reddit</option>
-            <option value="producthunt">ProductHunt</option>
+            <option value="producthunt">Product Hunt</option>
             <option value="github">GitHub</option>
             <option value="hacker_news">Hacker News</option>
             <option value="google_trends">Google Trends</option>
+            <option value="google_autocomplete">Google Autocomplete</option>
             <option value="eurlex">EUR-Lex</option>
             <option value="legifrance">Legifrance</option>
+            <option value="insee">INSEE</option>
+            <option value="twitter">Twitter/X</option>
+            <option value="stackoverflow">Stack Overflow</option>
+            <option value="indiehackers">Indie Hackers</option>
+            <option value="serpapi_g2">G2 Reviews</option>
+            <option value="serpapi_capterra">Capterra</option>
+            <option value="trustpilot">Trustpilot</option>
+            <option value="shopify_apps">Shopify Apps</option>
+            <option value="chrome_webstore">Chrome Web Store</option>
+            <option value="zapier">Zapier</option>
+            <option value="crunchbase">Crunchbase</option>
+            <option value="similarweb">SimilarWeb</option>
+            <option value="builtwith">BuiltWith</option>
+            <option value="data_gouv">Data.gouv.fr</option>
+            <option value="eu_ted">EU TED</option>
+            <option value="boamp">BOAMP</option>
+            <option value="job_boards">Job Boards</option>
+            <option value="upwork">Upwork</option>
+            <option value="malt">Malt</option>
+            <option value="pricing_tracker">Pricing Tracker</option>
+            <option value="betalist">BetaList</option>
+            <option value="alternativeto">AlternativeTo</option>
+            <option value="acquire">Acquire.com</option>
+            <option value="wellfound">Wellfound</option>
+            <option value="dealroom">Dealroom</option>
+            <option value="open_startups">Open Startups</option>
+            <option value="saashub">SaaSHub</option>
+            <option value="starter_story">Starter Story</option>
+            <option value="appsumo">AppSumo</option>
+            <option value="ycombinator">Y Combinator</option>
+            <option value="pappers">Pappers</option>
+            <option value="serpapi_serp">SerpAPI SERP</option>
           </select>
 
           <button

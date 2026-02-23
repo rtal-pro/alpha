@@ -11,38 +11,16 @@ import {
   type SignalType,
   type ScrapeSource,
 } from './base.js';
+import { resolveCategory } from '../utils/category-mapper.js';
 
 // ---------------------------------------------------------------------------
 // Config
 // ---------------------------------------------------------------------------
 
-const MIN_CLUSTER_SIZE = 3;
-const CLUSTER_WINDOW_DAYS = 14;
-const MIN_AVG_SCORE = 20;
+const MIN_CLUSTER_SIZE = 2;
+const CLUSTER_WINDOW_DAYS = 30;
+const MIN_AVG_SCORE = 10;
 
-// Subreddits → category mapping
-const SUBREDDIT_CATEGORIES: Record<string, string> = {
-  SaaS: 'general_saas',
-  startups: 'general_saas',
-  Entrepreneur: 'general_saas',
-  microsaas: 'general_saas',
-  webdev: 'devtools',
-  javascript: 'devtools',
-  reactjs: 'devtools',
-  node: 'devtools',
-  programming: 'devtools',
-  devops: 'devtools',
-  selfhosted: 'devtools',
-  fintech: 'fintech',
-  PersonalFinance: 'fintech',
-  smallbusiness: 'general_saas',
-  ecommerce: 'ecommerce',
-  digital_marketing: 'marketing',
-  legaladvice: 'compliance_legal',
-  healthcare: 'healthcare',
-  realestateinvesting: 'real_estate',
-  edtech: 'education',
-};
 
 // ---------------------------------------------------------------------------
 // CommunityDemandDetector
@@ -139,17 +117,10 @@ export class CommunityDemandDetector extends BaseSignalDetector {
     const grouped: Record<string, NormalizedItem[]> = {};
 
     for (const item of items) {
-      let category = 'general_saas';
-
-      // Try to resolve from subreddit metadata
+      const text = `${item.title} ${item.description ?? ''}`;
       const subreddit = item.metadata?.['subreddit'] as string | undefined;
-      if (subreddit && SUBREDDIT_CATEGORIES[subreddit]) {
-        category = SUBREDDIT_CATEGORIES[subreddit]!;
-      } else if (item.categories.length > 0) {
-        // Fall back to first category tag
-        const sub = item.categories[0]!.replace('r/', '');
-        category = SUBREDDIT_CATEGORIES[sub] ?? 'general_saas';
-      }
+      const cats = subreddit ? [subreddit, ...item.categories] : item.categories;
+      const category = resolveCategory(cats, text);
 
       if (!grouped[category]) grouped[category] = [];
       grouped[category]!.push(item);

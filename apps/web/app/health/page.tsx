@@ -5,7 +5,7 @@ import { cn, formatDate, statusColor } from '@/lib/utils';
 
 interface ScraperHealth {
   source: string;
-  status: 'healthy' | 'degraded' | 'broken';
+  status: 'healthy' | 'degraded' | 'broken' | 'unknown';
   last_success: string | null;
   success_rate: number;
   avg_response_time_ms: number;
@@ -13,106 +13,14 @@ interface ScraperHealth {
   last_error: string | null;
 }
 
-// Placeholder data used when the API is unavailable
-const PLACEHOLDER_DATA: ScraperHealth[] = [
-  {
-    source: 'Reddit (r/SaaS)',
-    status: 'healthy',
-    last_success: new Date().toISOString(),
-    success_rate: 98.5,
-    avg_response_time_ms: 1250,
-    total_runs: 342,
-    last_error: null,
-  },
-  {
-    source: 'Reddit (r/startups)',
-    status: 'healthy',
-    last_success: new Date().toISOString(),
-    success_rate: 97.2,
-    avg_response_time_ms: 1180,
-    total_runs: 340,
-    last_error: null,
-  },
-  {
-    source: 'Indie Hackers',
-    status: 'degraded',
-    last_success: new Date(Date.now() - 3600000).toISOString(),
-    success_rate: 78.4,
-    avg_response_time_ms: 3450,
-    total_runs: 289,
-    last_error: 'Timeout after 10s',
-  },
-  {
-    source: 'Product Hunt',
-    status: 'healthy',
-    last_success: new Date().toISOString(),
-    success_rate: 95.8,
-    avg_response_time_ms: 890,
-    total_runs: 315,
-    last_error: null,
-  },
-  {
-    source: 'G2 Reviews',
-    status: 'healthy',
-    last_success: new Date().toISOString(),
-    success_rate: 94.1,
-    avg_response_time_ms: 2100,
-    total_runs: 298,
-    last_error: null,
-  },
-  {
-    source: 'Capterra',
-    status: 'broken',
-    last_success: new Date(Date.now() - 86400000).toISOString(),
-    success_rate: 12.3,
-    avg_response_time_ms: 8900,
-    total_runs: 310,
-    last_error: 'Blocked by Cloudflare (403)',
-  },
-  {
-    source: 'Trustpilot',
-    status: 'healthy',
-    last_success: new Date().toISOString(),
-    success_rate: 96.7,
-    avg_response_time_ms: 1560,
-    total_runs: 305,
-    last_error: null,
-  },
-  {
-    source: 'Twitter/X',
-    status: 'degraded',
-    last_success: new Date(Date.now() - 7200000).toISOString(),
-    success_rate: 65.2,
-    avg_response_time_ms: 4200,
-    total_runs: 278,
-    last_error: 'Rate limited (429)',
-  },
-  {
-    source: 'Hacker News',
-    status: 'healthy',
-    last_success: new Date().toISOString(),
-    success_rate: 99.1,
-    avg_response_time_ms: 680,
-    total_runs: 350,
-    last_error: null,
-  },
-  {
-    source: 'Legifrance',
-    status: 'healthy',
-    last_success: new Date().toISOString(),
-    success_rate: 91.3,
-    avg_response_time_ms: 2800,
-    total_runs: 142,
-    last_error: null,
-  },
-];
-
 function StatusBadge({ status }: { status: string }) {
   return (
     <span
       className={cn(
         'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border',
-        statusColor(status)
+        status === 'unknown'
+          ? 'bg-zinc-500/10 text-zinc-400 border-zinc-500/30'
+          : statusColor(status)
       )}
     >
       <span
@@ -120,7 +28,8 @@ function StatusBadge({ status }: { status: string }) {
           'w-1.5 h-1.5 rounded-full',
           status === 'healthy' && 'bg-green-400',
           status === 'degraded' && 'bg-yellow-400',
-          status === 'broken' && 'bg-red-400'
+          status === 'broken' && 'bg-red-400',
+          status === 'unknown' && 'bg-zinc-500'
         )}
       />
       {status.charAt(0).toUpperCase() + status.slice(1)}
@@ -158,8 +67,7 @@ export default function HealthPage() {
         const data = await res.json();
         setScrapers(data.scrapers || []);
       } catch {
-        // Fall back to placeholder data
-        setScrapers(PLACEHOLDER_DATA);
+        setScrapers([]);
       } finally {
         setLoading(false);
       }
@@ -171,6 +79,7 @@ export default function HealthPage() {
   const healthySources = scrapers.filter((s) => s.status === 'healthy').length;
   const degradedSources = scrapers.filter((s) => s.status === 'degraded').length;
   const brokenSources = scrapers.filter((s) => s.status === 'broken').length;
+  const unknownSources = scrapers.filter((s) => s.status === 'unknown').length;
 
   return (
     <div className="p-8">
@@ -183,7 +92,7 @@ export default function HealthPage() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-8">
         <div className="p-4 rounded-xl bg-zinc-900 border border-zinc-800">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-green-400/10 flex items-center justify-center">
@@ -220,6 +129,19 @@ export default function HealthPage() {
             <div>
               <p className="text-2xl font-bold text-red-400">{brokenSources}</p>
               <p className="text-xs text-zinc-500">Broken</p>
+            </div>
+          </div>
+        </div>
+        <div className="p-4 rounded-xl bg-zinc-900 border border-zinc-800">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-zinc-400/10 flex items-center justify-center">
+              <svg className="w-5 h-5 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-zinc-400">{unknownSources}</p>
+              <p className="text-xs text-zinc-500">Not yet run</p>
             </div>
           </div>
         </div>
@@ -283,18 +205,22 @@ export default function HealthPage() {
                     </span>
                   </td>
                   <td className="px-6 py-4">
-                    <span
-                      className={cn(
-                        'text-sm font-medium tabular-nums',
-                        scraper.success_rate >= 90
-                          ? 'text-green-400'
-                          : scraper.success_rate >= 70
-                            ? 'text-yellow-400'
-                            : 'text-red-400'
-                      )}
-                    >
-                      {scraper.success_rate.toFixed(1)}%
-                    </span>
+                    {scraper.total_runs === 0 && scraper.success_rate === 0 ? (
+                      <span className="text-sm text-zinc-600">-</span>
+                    ) : (
+                      <span
+                        className={cn(
+                          'text-sm font-medium tabular-nums',
+                          scraper.success_rate >= 90
+                            ? 'text-green-400'
+                            : scraper.success_rate >= 70
+                              ? 'text-yellow-400'
+                              : 'text-red-400'
+                        )}
+                      >
+                        {scraper.success_rate.toFixed(1)}%
+                      </span>
+                    )}
                   </td>
                   <td className="px-6 py-4">
                     <ResponseTimeBar ms={scraper.avg_response_time_ms} />

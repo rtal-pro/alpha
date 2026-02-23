@@ -22,7 +22,7 @@ export interface GeneratedOpportunity {
   type:
     | 'geo_gap' | 'regulatory_gap' | 'convergence' | 'competitor_weakness'
     | 'api_sunset_gap' | 'funding_follows_pain' | 'talent_migration'
-    | 'platform_risk';
+    | 'platform_risk' | 'oss_commercial_gap';
   composite_score: number;
   growth_score: number;
   gap_score: number;
@@ -57,6 +57,7 @@ export class OpportunityGenerator {
     const [
       geoGaps, regulatoryGaps, convergences, weaknesses,
       apiSunsetGaps, fundingFollowsPain, talentMigrations, platformRisks,
+      ossGaps,
     ] = await Promise.all([
       this.detectGeoGaps(),
       this.detectRegulatoryGaps(),
@@ -66,11 +67,13 @@ export class OpportunityGenerator {
       this.detectFundingFollowsPain(),
       this.detectTalentMigration(),
       this.detectPlatformRisk(),
+      this.detectOSSCommercialGaps(),
     ]);
 
     const all = [
       ...geoGaps, ...regulatoryGaps, ...convergences, ...weaknesses,
       ...apiSunsetGaps, ...fundingFollowsPain, ...talentMigrations, ...platformRisks,
+      ...ossGaps,
     ];
 
     console.log(
@@ -78,7 +81,8 @@ export class OpportunityGenerator {
       `${geoGaps.length} geo_gap, ${regulatoryGaps.length} regulatory_gap, ` +
       `${convergences.length} convergence, ${weaknesses.length} competitor_weakness, ` +
       `${apiSunsetGaps.length} api_sunset_gap, ${fundingFollowsPain.length} funding_follows_pain, ` +
-      `${talentMigrations.length} talent_migration, ${platformRisks.length} platform_risk`,
+      `${talentMigrations.length} talent_migration, ${platformRisks.length} platform_risk, ` +
+      `${ossGaps.length} oss_commercial_gap`,
     );
 
     return all;
@@ -183,11 +187,11 @@ export class OpportunityGenerator {
       target_geo: opp.target_geo,
       reference_geo: opp.reference_geo ?? null,
       status: opp.status,
-      score_history: JSON.stringify([{
+      score_history: [{
         score: opp.composite_score,
         timestamp: new Date().toISOString(),
         signal_count: opp.source_signals.length,
-      }]),
+      }],
     }));
 
     const ids: string[] = [];
@@ -378,7 +382,7 @@ export class OpportunityGenerator {
     for (const [category, catSignals] of byCategory) {
       const uniqueTypes = new Set(catSignals.map((s: { signal_type: string }) => s.signal_type));
 
-      if (uniqueTypes.size < 4) continue;
+      if (uniqueTypes.size < 2) continue;
 
       const avgStrength = catSignals.reduce(
         (sum: number, s: { strength: number }) => sum + s.strength, 0,
@@ -399,7 +403,7 @@ export class OpportunityGenerator {
           `${uniqueTypes.size} different signal types detected in "${category}" within 30 days: ` +
           `${Array.from(uniqueTypes).join(', ')}. Total signals: ${catSignals.length}.`,
         type: 'convergence',
-        composite_score: Math.min(100, Math.round(avgStrength * (uniqueTypes.size / 4))),
+        composite_score: Math.min(100, Math.round(avgStrength * (uniqueTypes.size / 2))),
         growth_score: avgStrength,
         gap_score: 0,
         regulatory_score: 0,
@@ -453,7 +457,7 @@ export class OpportunityGenerator {
     }
 
     for (const [productId, signals] of byProduct) {
-      if (signals.length < 2) continue;
+      if (signals.length < 1) continue;
 
       const product = signals[0]!.products as {
         id: string;
@@ -834,6 +838,98 @@ export class OpportunityGenerator {
           concern_types: [...new Set(concernSignals.map((s: { signal_type: string }) => s.signal_type))],
         },
         target_geo: 'GLOBAL',
+        status: 'new',
+      });
+    }
+
+    return opportunities;
+  }
+
+  // -----------------------------------------------------------------------
+  // Path 9: OSS Commercial Gap — popular open-source projects that lack
+  // a managed/hosted SaaS offering, especially in the FR market
+  // -----------------------------------------------------------------------
+
+  private async detectOSSCommercialGaps(): Promise<GeneratedOpportunity[]> {
+    const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+    const { data: ossSignals } = await this.supabase
+      .from('signals')
+      .select('*')
+      .eq('signal_type', 'oss_traction')
+      .gte('detected_at', cutoff.toISOString())
+      .gte('strength', 25)
+      .order('strength', { ascending: false })
+      .limit(200);
+
+    if (!ossSignals || ossSignals.length === 0) return [];
+
+    // Group by category to find clusters of OSS traction
+    const byCategory = new Map<string, typeof ossSignals>();
+    for (const s of ossSignals) {
+      const cat = s.category ?? 'devtools';
+      const group = byCategory.get(cat) ?? [];
+      group.push(s);
+      byCategory.set(cat, group);
+    }
+
+    const opportunities: GeneratedOpportunity[] = [];
+
+    for (const [category, signals] of byCategory) {
+      if (signals.length < 1) continue;
+
+      // Deduplicate by title (same repo can appear multiple times)
+      const uniqueProjects = new Map<string, (typeof signals)[0]>();
+      for (const s of signals) {
+        const key = s.title?.replace(/^OSS commercial gap: /, '') ?? s.id;
+        if (!uniqueProjects.has(key) || s.strength > (uniqueProjects.get(key)!.strength ?? 0)) {
+          uniqueProjects.set(key, s);
+        }
+      }
+
+      if (uniqueProjects.size < 1) continue;
+
+      const dedupedSignals = Array.from(uniqueProjects.values());
+      const avgStrength = dedupedSignals.reduce(
+        (sum, s) => sum + (s.strength ?? 0), 0,
+      ) / dedupedSignals.length;
+
+      const topProjects = dedupedSignals
+        .sort((a, b) => (b.strength ?? 0) - (a.strength ?? 0))
+        .slice(0, 5);
+
+      const compositeScore = Math.min(100, Math.round(
+        avgStrength * 0.5 +
+        Math.min(100, dedupedSignals.length * 15) * 0.3 +
+        50 * 0.2, // base feasibility
+      ));
+
+      opportunities.push({
+        title: `OSS commercial gap: ${category} (${dedupedSignals.length} projects)`,
+        category,
+        description:
+          `${dedupedSignals.length} popular open-source projects in "${category}" lack a managed SaaS offering. ` +
+          `Top projects: ${topProjects.map((s) => s.title?.replace(/^OSS commercial gap: /, '').split(' ')[0]).join(', ')}. ` +
+          `Opportunity to build hosted/managed versions targeting the FR/EU market.`,
+        type: 'oss_commercial_gap',
+        composite_score: compositeScore,
+        growth_score: Math.round(avgStrength),
+        gap_score: Math.min(100, dedupedSignals.length * 20),
+        regulatory_score: 0,
+        feasibility_score: 60,
+        source_products: [],
+        source_signals: dedupedSignals.map((s) => s.id).slice(0, 20),
+        source_regulations: [],
+        evidence_summary: {
+          project_count: dedupedSignals.length,
+          avg_strength: Math.round(avgStrength),
+          top_projects: topProjects.map((s) => ({
+            name: s.title?.replace(/^OSS commercial gap: /, ''),
+            strength: s.strength,
+            source_url: s.source_url,
+          })),
+        },
+        target_geo: 'FR',
         status: 'new',
       });
     }

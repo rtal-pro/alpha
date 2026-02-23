@@ -43,10 +43,10 @@ export class BetaListScraper extends BaseScraper {
     const items: RawScrapedItem[] = [];
 
     for (let page = 1; page <= pages; page++) {
-      const url = page === 1 ? `${BASE_URL}/startups` : `${BASE_URL}/startups?page=${page}`;
+      const url = page === 1 ? `${BASE_URL}/` : `${BASE_URL}/?page=${page}`;
       const pageItems = await this.retryWithBackoff(() => this.fetchAndParse(url));
       items.push(...pageItems);
-      if (pageItems.length < 15) break;
+      if (pageItems.length < 5) break;
       await this.rateLimitDelay(RATE_LIMIT_DELAY_MS);
     }
 
@@ -63,7 +63,7 @@ export class BetaListScraper extends BaseScraper {
 
     const limit = params.limit ?? 20;
     const slug = category.toLowerCase().replace(/\s+/g, '-');
-    const url = `${BASE_URL}/markets/${slug}`;
+    const url = `${BASE_URL}/topics/${slug}`;
 
     const items = await this.retryWithBackoff(() => this.fetchAndParse(url));
     await this.rateLimitDelay(RATE_LIMIT_DELAY_MS);
@@ -78,8 +78,8 @@ export class BetaListScraper extends BaseScraper {
   private async fetchAndParse(url: string): Promise<RawScrapedItem[]> {
     const response = await fetch(url, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; SaaSIdeaEngine/0.1)',
-        Accept: 'text/html',
+        'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        Accept: 'text/html,application/xhtml+xml',
       },
     });
 
@@ -95,77 +95,46 @@ export class BetaListScraper extends BaseScraper {
     const items: RawScrapedItem[] = [];
     const now = new Date();
 
-    // Extract startup cards using regex (cheerio not imported — lightweight approach)
-    // BetaList uses structured data in startup listings
-    const cardRegex = /<article[^>]*class="[^"]*startupCard[^"]*"[^>]*>([\s\S]*?)<\/article>/gi;
-    const titleRegex = /<h2[^>]*>\s*<a[^>]*href="([^"]*)"[^>]*>([^<]*)<\/a>/i;
-    const descRegex = /<p[^>]*class="[^"]*description[^"]*"[^>]*>([\s\S]*?)<\/p>/i;
-    const tagRegex = /<a[^>]*class="[^"]*tag[^"]*"[^>]*>([^<]*)<\/a>/gi;
-    const dateRegex = /data-featured="([^"]*)"/i;
+    // BetaList 2024+ uses simple link + div structure:
+    //   <a href="/startups/{slug}">
+    //     <div class="font-medium ...">Name</div>
+    //   </a>
+    //   <div class="text-gray-600 ...">Description</div>
+    const startupLinkRegex = /href="\/startups\/([a-z0-9_-]+)"/gi;
+    const seen = new Set<string>();
 
-    let match;
-    while ((match = cardRegex.exec(html)) !== null) {
-      const card = match[1]!;
-      const titleMatch = titleRegex.exec(card);
-      if (!titleMatch) continue;
+    let linkMatch;
+    while ((linkMatch = startupLinkRegex.exec(html)) !== null) {
+      const slug = linkMatch[1]!;
+      if (slug === 'new' || seen.has(slug)) continue;
+      seen.add(slug);
 
-      const href = titleMatch[1] ?? '';
-      const name = titleMatch[2]?.trim() ?? '';
-      const descMatch = descRegex.exec(card);
-      const description = descMatch?.[1]?.replace(/<[^>]+>/g, '').trim() ?? '';
-      const dateMatch = dateRegex.exec(card);
-      const featuredDate = dateMatch?.[1] ?? now.toISOString();
+      // Extract name and description from nearby context
+      const pos = linkMatch.index;
+      const context = html.slice(pos, pos + 500);
 
-      const tags: string[] = [];
-      let tagMatch;
-      while ((tagMatch = tagRegex.exec(card)) !== null) {
-        tags.push(tagMatch[1]!.trim());
-      }
+      const nameMatch = /class="font-medium[^"]*">([^<]+)<\/div>/i.exec(context);
+      const name = nameMatch?.[1]?.trim() ?? slug.replace(/-/g, ' ');
 
-      const entityId = href.replace(/^\/startups\//, '') || name.toLowerCase().replace(/\s+/g, '-');
+      const descMatch = /class="text-gray-600[^"]*">([^<]+)<\/div>/i.exec(context);
+      const description = descMatch?.[1]?.trim() ?? '';
+
+      if (!name || name === slug) continue;
 
       items.push({
         source: 'betalist',
-        entityId: `betalist:${entityId}`,
-        url: href.startsWith('http') ? href : `${BASE_URL}${href}`,
+        entityId: `betalist:${slug}`,
+        url: `${BASE_URL}/startups/${slug}`,
         payload: {
           name,
           description,
-          tags,
-          featured_date: featuredDate,
+          tags: [],
+          featured_date: now.toISOString(),
           stage: 'beta',
         },
         format: 'betalist_startup_v1',
         scrapedAt: now,
       });
-    }
-
-    // Fallback: try JSON-LD structured data
-    if (items.length === 0) {
-      const jsonLdRegex = /<script type="application\/ld\+json">([\s\S]*?)<\/script>/gi;
-      let jsonMatch;
-      while ((jsonMatch = jsonLdRegex.exec(html)) !== null) {
-        try {
-          const data = JSON.parse(jsonMatch[1]!) as Record<string, unknown>;
-          if (data['@type'] === 'SoftwareApplication' || data['@type'] === 'Product') {
-            items.push({
-              source: 'betalist',
-              entityId: `betalist:${(data['name'] as string ?? '').toLowerCase().replace(/\s+/g, '-')}`,
-              url: (data['url'] as string) ?? '',
-              payload: {
-                name: data['name'],
-                description: data['description'],
-                tags: [],
-                stage: 'beta',
-              },
-              format: 'betalist_startup_v1',
-              scrapedAt: now,
-            });
-          }
-        } catch {
-          // Invalid JSON-LD, skip
-        }
-      }
     }
 
     return items;
